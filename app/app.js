@@ -234,18 +234,41 @@ function dlBoltz(){
   setTimeout(()=>download(`boltz_${o.acc}_${o.label}.yaml`, y(o.sM)), 250);
 }
 
-/* ────────────── 화면 3·4 · 검정 재계산 (실제 계산) ────────────── */
+/* ────────────── 판정 계산 (순수 함수 · 단일 출처) ──────────────
+   화면 3·4·5 가 모두 이 두 함수만 쓴다. 검정 로직의 복사본을 만들지 않는다.
+   검정 방향은 축마다 다르다 — 구조는 단측(신호 > 노이즈), 결합은 양측.
+   두 축은 귀무가설이 다르므로 det 를 합성하지 않고 나란히 읽는다. */
 let RMSD=null, IPTM=null;
 
-async function renderStructureAxis(gene){
+/** 구조 축 — 변이 잔기 8 Å 이내 Cα 국소 RMSD, 재현 노이즈 바닥 대비 */
+async function computeStructureVerdict(gene){
   if(!RMSD) RMSD = await loadCsv('data/rmsd_pairs.csv');
-  const c = CASES[gene];
-  const rows = RMSD.filter(r=>r.gene===gene);
+  const rows  = RMSD.filter(r=>r.gene===gene);
   const noise = rows.filter(r=>r.comparison.startsWith('noise')).map(r=>+r.rmsd_local8A);
   const sig   = rows.filter(r=>r.comparison==='signal_WT_vs_MUT').map(r=>+r.rmsd_local8A);
   const {p} = mannWhitneyU(sig, noise, 'greater');
-  const det = p<0.05;
-  const mn=median(noise), ms=median(sig), d=ms-mn;
+  const mn=median(noise), ms=median(sig);
+  return {axis:'structure', gene, noise, sig, p, det:p<0.05,
+          mn, ms, d:ms-mn, ratio:ms/mn};
+}
+
+/** 결합 축 — TREM2 + Aβ42 복합체 ipTM. 원자료가 TREM2 단일 사례 전제(gene 칼럼 없음) */
+async function computeBindingVerdict(){
+  if(!IPTM) IPTM = await loadCsv('data/boltz_iptm.csv');
+  const wt  = IPTM.filter(r=>r.allele==='WT').map(r=>+r.iptm);
+  const mut = IPTM.filter(r=>r.allele==='R62H').map(r=>+r.iptm);
+  const {p} = mannWhitneyU(mut, wt, 'two-sided');
+  const mw=median(wt), mm=median(mut);
+  return {axis:'binding', gene:'TREM2', wt, mut, p, det:p<0.05,
+          mw, mm, d:mm-mw, spread:Math.max(...wt)-Math.min(...wt)};
+}
+
+/* ────────────── 화면 3·4 · 검정 결과 표시 ────────────── */
+
+async function renderStructureAxis(gene){
+  const v = await computeStructureVerdict(gene);
+  const c = CASES[gene];
+  const {p, det, mn, ms, d, noise, sig} = v;
 
   $('#sTitle').innerHTML = `${gene} · ${c.wt}${c.pos}${c.mut} <span class="muted mono">${c.rsid}</span>`;
 
@@ -294,12 +317,8 @@ async function renderStructureAxis(gene){
 }
 
 async function renderBindingAxis(){
-  if(!IPTM) IPTM = await loadCsv('data/boltz_iptm.csv');
-  const wt  = IPTM.filter(r=>r.allele==='WT').map(r=>+r.iptm);
-  const mut = IPTM.filter(r=>r.allele==='R62H').map(r=>+r.iptm);
-  const {p} = mannWhitneyU(mut, wt, 'two-sided');
-  const det = p<0.05;
-  const mw=median(wt), mm=median(mut), spread=Math.max(...wt)-Math.min(...wt), d=mm-mw;
+  const v = await computeBindingVerdict();
+  const {p, det, mw, mm, d, spread, wt, mut} = v;
 
   $('#bScore').innerHTML = `
    <div class="score ${det?'sig':'ns'}">
@@ -424,16 +443,12 @@ function initNav(){
 }
 
 async function renderReport(){
-  if(!RMSD) RMSD = await loadCsv('data/rmsd_pairs.csv');
-  if(!IPTM) IPTM = await loadCsv('data/boltz_iptm.csv');
   let html='';
+  const sv={};                       // 사례별 구조 축 판정 — 매트릭스에서 재사용한다
   for(const g of Object.keys(CASES)){
     const c=CASES[g];
-    const rows=RMSD.filter(r=>r.gene===g);
-    const noise=rows.filter(r=>r.comparison.startsWith('noise')).map(r=>+r.rmsd_local8A);
-    const sig=rows.filter(r=>r.comparison==='signal_WT_vs_MUT').map(r=>+r.rmsd_local8A);
-    const {p}=mannWhitneyU(sig,noise,'greater');
-    const mn=median(noise), ms=median(sig), det=p<0.05;
+    const v = await computeStructureVerdict(g); sv[g]=v;
+    const {p, det, mn, ms} = v;
     html+=`<tr><td><b>${g}</b> <span class="mono muted">${c.wt}${c.pos}${c.mut}</span></td>
       <td class="mono">구조</td><td class="n mono">${mn.toFixed(3)} Å</td>
       <td class="n mono">${ms.toFixed(3)} Å</td>
@@ -441,15 +456,64 @@ async function renderReport(){
       <td class="n mono">${fmtP(p)}</td>
       <td><span class="badge ${det?'sig':'ns'}">${det?'변동성 초과':'변동성 내'}</span></td></tr>`;
   }
-  const wt=IPTM.filter(r=>r.allele==='WT').map(r=>+r.iptm);
-  const mut=IPTM.filter(r=>r.allele==='R62H').map(r=>+r.iptm);
-  const {p:pb}=mannWhitneyU(mut,wt,'two-sided');
+  const b = await computeBindingVerdict();
   html+=`<tr><td><b>TREM2</b> <span class="mono muted">R62H + Aβ42</span></td>
-    <td class="mono">인터페이스</td><td class="n mono">${(Math.max(...wt)-Math.min(...wt)).toFixed(3)}</td>
-    <td class="n mono">${Math.abs(median(mut)-median(wt)).toFixed(3)}</td>
-    <td class="n mono">—</td><td class="n mono">${fmtP(pb)}</td>
-    <td><span class="badge ${pb<0.05?'sig':'ns'}">${pb<0.05?'변동성 초과':'변동성 내'}</span></td></tr>`;
+    <td class="mono">인터페이스</td><td class="n mono">${b.spread.toFixed(3)}</td>
+    <td class="n mono">${Math.abs(b.d).toFixed(3)}</td>
+    <td class="n mono">—</td><td class="n mono">${fmtP(b.p)}</td>
+    <td><span class="badge ${b.det?'sig':'ns'}">${b.det?'변동성 초과':'변동성 내'}</span></td></tr>`;
   $('#rTable').innerHTML=html;
+  renderVerdictMatrix(sv, b);        // 위에서 구한 판정을 그대로 넘긴다 (재계산 없음)
+}
+
+/* ────────────── 종합 판정 매트릭스 (2×2) ──────────────
+   두 축의 det 를 AND/OR 로 합성하지 않는다. 구조는 단측(신호 > 노이즈),
+   결합은 양측이라 귀무가설이 다르다 — 교차 배치해 나란히 읽는 표다.
+
+   결합 축 원자료(boltz_iptm.csv)는 gene 칼럼이 없는 TREM2 단일 사례 전제다.
+   CD33·PILRA 는 '결합 미측정' 으로 매트릭스 밖에 둔다.
+   미측정과 미감별은 다른 상태이므로 빈칸을 '차이 없음' 으로 표시하지 않는다. */
+const BIND_MEASURED = ['TREM2'];     // 결합 축 예측을 실제로 돌린 사례
+const CELL_HINT = {                  // 빈칸에 표시할 향후 배치 후보
+  'true|true'  : 'PILRA 결합 예측 시 후보',
+  'true|false' : 'PILRA 결합 예측 시 후보',
+  'false|true' : 'CD33 결합 예측 시 후보',
+  'false|false': 'CD33 결합 예측 시 후보',
+};
+
+function renderVerdictMatrix(sv, b){
+  // 어느 칸인지는 실측 판정에서 유도한다 — 위치를 하드코딩하지 않는다.
+  // 결합 예측이 추가되거나 판정이 바뀌면 칸도 따라 움직인다.
+  const placed={};
+  BIND_MEASURED.forEach(g=>{
+    if(!sv[g]) return;
+    (placed[`${sv[g].det}|${b.det}`] ||= []).push(g);
+  });
+
+  const cell = key => {
+    const occ = placed[key] || [];
+    if(!occ.length) return `<td class="mcell"><span class="muted">해당 사례 없음</span>
+      <div class="mhint">${CELL_HINT[key]}</div></td>`;
+    return `<td class="mcell on">${occ.map(g=>{
+      const c=CASES[g];
+      return `<div class="mcase"><b>${g}</b> <span class="mono">${c.wt}${c.pos}${c.mut}</span> ✔</div>
+        <div class="mhint">구조 p = ${fmtP(sv[g].p)} · 결합 p = ${fmtP(b.p)}</div>`;
+    }).join('')}</td>`;
+  };
+
+  const miss = Object.keys(CASES).filter(g=>!BIND_MEASURED.includes(g))
+    .map(g=>`${g} ${CASES[g].wt}${CASES[g].pos}${CASES[g].mut}`);
+
+  $('#rMatrix').innerHTML = `
+    <table class="matrix">
+      <tr><th style="width:26%"></th>
+          <th>결합 축 — 변동성 초과</th><th>결합 축 — 변동성 내</th></tr>
+      <tr><th>구조 축 — 변동성 초과</th>${cell('true|true')}${cell('true|false')}</tr>
+      <tr><th>구조 축 — 변동성 내</th>${cell('false|true')}${cell('false|false')}</tr>
+    </table>
+    <div class="mfoot"><b>결합 축 미측정</b> — ${miss.join(' · ')}
+      <span class="muted">· 결합 파트너를 문헌으로 확정한 뒤 Boltz-2 예측이 필요하여
+      매트릭스에 배치하지 않았습니다. 미측정은 미감별과 다른 상태입니다.</span></div>`;
 }
 
 function gotoScreen(id){
@@ -655,7 +719,7 @@ const DOC_CALLOUTS = {
        ['#sViewer',5],['#sPlot',6],['#sCond',7]],
   s4: [['#bScore .top',1],['#bScore .kpis',2],['#bViewer',3],
        ['#bPlot',4],['.disclaimer',5]],
-  s5: [['#rTable',1],['.g2b .panel',2],['.disclaimer',3]],
+  s5: [['#rMatrix',1],['#rTable',2],['.g2b .panel',3],['.disclaimer',4]],
   s6: [['.panel',1],['.g2b',2],['.disclaimer',3]],
 };
 
