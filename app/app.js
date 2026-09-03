@@ -24,6 +24,12 @@ const CASES = {
           wtCif:'trem2_full_wt', mutCif:'trem2_full_r62h', img:'TREM2_zoom.png'},
 };
 
+/** 사례 식별 라벨 — 두 축이 같은 문자열을 쓰도록 단일 출처로 둔다.
+    ⚠️ UniProt 정본 기준 표기다. PILRA 는 정본이 R78 이므로 R78G 가 되는데,
+       결합 축 데이터는 방향이 반대로 G78 을 정상형·R78 을 변이형으로 다룬다
+       (문헌 표기 G78R). 같은 변이 rs1859788 을 가리킨다 — 리포트 화면 각주 참조. */
+const caseLabel = g => `${CASES[g].wt}${CASES[g].pos}${CASES[g].mut}`;
+
 /* ────────────── 통계 ────────────── */
 const median = a => {const s=[...a].sort((x,y)=>x-y), m=s.length>>1;
   return s.length%2 ? s[m] : (s[m-1]+s[m])/2;};
@@ -281,7 +287,7 @@ async function renderStructureAxis(gene){
   const c = CASES[gene];
   const {p, det, mn, ms, d, noise, sig} = v;
 
-  $('#sTitle').innerHTML = `${gene} · ${c.wt}${c.pos}${c.mut} <span class="muted mono">${c.rsid}</span>`;
+  $('#sTitle').innerHTML = `${gene} · ${caseLabel(gene)} <span class="muted mono">${c.rsid}</span>`;
 
   $('#sScore').innerHTML = `
    <div class="score ${det?'sig':'ns'}">
@@ -460,7 +466,7 @@ async function renderReport(){
     const c=CASES[g];
     const v = await computeStructureVerdict(g); sv[g]=v;
     const {p, det, mn, ms} = v;
-    html+=`<tr><td><b>${g}</b> <span class="mono muted">${c.wt}${c.pos}${c.mut}</span></td>
+    html+=`<tr><td><b>${g}</b> <span class="mono muted">${caseLabel(g)}</span></td>
       <td class="mono">구조</td><td class="n mono">${mn.toFixed(3)} Å</td>
       <td class="n mono">${ms.toFixed(3)} Å</td>
       <td class="n mono">${(ms/mn).toFixed(2)}×</td>
@@ -473,7 +479,7 @@ async function renderReport(){
     if(!b) continue;
     bv[g]=b;
     const al=BIND_ALLELES[g];
-    html+=`<tr><td><b>${g}</b> <span class="mono muted">${al.mut} + ${al.lig}</span></td>
+    html+=`<tr><td><b>${g}</b> <span class="mono muted">${caseLabel(g)} + ${al.lig}</span></td>
       <td class="mono">인터페이스</td><td class="n mono">${b.spread.toFixed(3)}</td>
       <td class="n mono">${Math.abs(b.d).toFixed(3)}</td>
       <td class="n mono">—</td><td class="n mono">${fmtP(b.p)}</td>
@@ -517,7 +523,7 @@ function renderVerdictMatrix(sv, bv){
       CELL_HINT[key] ? `<div class="mhint">${CELL_HINT[key]}</div>` : ''}</td>`;
     return `<td class="mcell on">${occ.map(g=>{
       const al=BIND_ALLELES[g];
-      return `<div class="mcase"><b>${g}</b> <span class="mono">${al.mut}</span> ✔</div>
+      return `<div class="mcase"><b>${g}</b> <span class="mono">${caseLabel(g)}</span> ✔</div>
         <div class="mhint">구조 p = ${fmtP(sv[g].p)} · 결합 p = ${fmtP(bv[g].p)} <span class="muted">(+ ${al.lig})</span></div>${
         CELL_NOTE[g] ? `<div class="mnote"><b>추정</b> — ${CELL_NOTE[g]}</div>` : ''}`;
     }).join('')}</td>`;
