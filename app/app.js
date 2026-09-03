@@ -72,6 +72,81 @@ function normCdf(z){ // Abramowitz–Stegun 26.2.17
 const fmtP = p => p<1e-4 ? p.toExponential(1).replace('e','×10^').replace('^-','⁻')
                          : p.toPrecision(2);
 
+/* ────────────── 순열검정 엔진 (두 축 공용) ──────────────
+   음성 대조군 설계 — 같은 조건 안의 쌍 = 노이즈(모델 진동), 조건 간 쌍 = 신호.
+   통계량 = median(신호) − median(노이즈).
+
+   ⚠️ 쌍은 서로 독립이 아니다. 같은 구조가 여러 쌍에 재사용되므로
+      Mann–Whitney 의 p 는 과소평가된다 (예: PILRA 구조 축 6e-9 → 0.0079).
+      라벨을 뒤섞어 얻은 경험 분포로 교정한다.
+
+   분할 수가 적으면 전수 열거(정확), 많으면 고정 시드 표본 — 둘 다 결정적이다.
+   src/detectability.py 가 같은 알고리즘·같은 PRNG 를 쓴다 (p 가 자릿수까지 일치). */
+const PERM_EXACT_LIMIT = 20000;   // 분할 수가 이하이면 전수 열거
+const PERM_N = 20000;             // 초과하면 표본 순열 횟수
+const PERM_SEED = 1;
+
+const medFast = a => {            // 순열 루프 안에서만 쓰는 빠른 중앙값
+  const s = Float64Array.from(a).sort();
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
+};
+
+/** 라벨(inA)에 따라 쌍을 노이즈/신호로 가른다 */
+function splitPairs(D, N, inA){
+  const noise = [], signal = [];
+  for(let i=0;i<N;i++) for(let j=i+1;j<N;j++)
+    (inA[i]===inA[j] ? noise : signal).push(D[i*N+j]);
+  return {noise, signal};
+}
+function pairStat(D, N, inA){
+  const {noise, signal} = splitPairs(D, N, inA);
+  return medFast(signal) - medFast(noise);
+}
+
+/** mulberry32 — 결정적 PRNG. 파이썬 포팅본과 난수열이 동일하다. */
+function mulberry32(seed){
+  let a = seed|0;
+  return function(){
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a>>>15, 1|a);
+    t = t + Math.imul(t ^ t>>>7, 61|t) ^ t;
+    return ((t ^ t>>>14) >>> 0) / 4294967296;
+  };
+}
+const nChooseK = (n,k) => { let r=1; for(let i=1;i<=k;i++) r = r*(n-k+i)/i; return Math.round(r); };
+
+/** 라벨 순열검정 -> {p, method:'exact'|'sample', nPerm} */
+function permutationP(D, N, n1){
+  const inA = new Uint8Array(N); for(let i=0;i<n1;i++) inA[i]=1;
+  const obs = pairStat(D, N, inA);
+
+  if(nChooseK(N, n1) <= PERM_EXACT_LIMIT){
+    // 전수 열거. 통계량이 A/B 라벨 교환에 불변이므로 0번을 A 에 고정해 여집합 대칭을 없앤다.
+    let cnt=0, tot=0; const pick=new Array(n1);
+    (function rec(start, depth){
+      if(depth===n1){
+        const lab=new Uint8Array(N); for(const i of pick) lab[i]=1;
+        tot++; if(pairStat(D,N,lab) >= obs) cnt++; return;
+      }
+      for(let i=start; i<=N-(n1-depth); i++){
+        if(depth===0 && i>0) break;              // 0 고정
+        pick[depth]=i; rec(i+1, depth+1);
+      }
+    })(0,0);
+    return {p: cnt/tot, method:'exact', nPerm: tot};
+  }
+
+  const rnd = mulberry32(PERM_SEED), ord = [...Array(N).keys()];
+  let cnt = 0;
+  for(let k=0;k<PERM_N;k++){
+    for(let i=N-1;i>0;i--){ const j=(rnd()*(i+1))|0; const t=ord[i]; ord[i]=ord[j]; ord[j]=t; }
+    const lab=new Uint8Array(N); for(let i=0;i<n1;i++) lab[ord[i]]=1;
+    if(pairStat(D,N,lab) >= obs) cnt++;
+  }
+  return {p:(cnt+1)/(PERM_N+1), method:'sample', nPerm: PERM_N};
+}
+
 /* ────────────── CSV ────────────── */
 async function loadCsv(path){
   const txt = await (await fetch(path)).text();
@@ -245,17 +320,37 @@ function dlBoltz(){
    검정 방향은 축마다 다르다 — 구조는 단측(신호 > 노이즈), 결합은 양측.
    두 축은 귀무가설이 다르므로 det 를 합성하지 않고 나란히 읽는다. */
 let RMSD=null, IPTM=null;
+const VERDICT_CACHE = {};          // 순열 2만 회를 렌더마다 돌리지 않는다
 
 /** 구조 축 — 변이 잔기 8 Å 이내 Cα 국소 RMSD, 재현 노이즈 바닥 대비 */
 async function computeStructureVerdict(gene){
+  const key = 'S:'+gene; if(VERDICT_CACHE[key]) return VERDICT_CACHE[key];
   if(!RMSD) RMSD = await loadCsv('data/rmsd_pairs.csv');
   const rows  = RMSD.filter(r=>r.gene===gene);
   const noise = rows.filter(r=>r.comparison.startsWith('noise')).map(r=>+r.rmsd_local8A);
   const sig   = rows.filter(r=>r.comparison==='signal_WT_vs_MUT').map(r=>+r.rmsd_local8A);
-  const {p} = mannWhitneyU(sig, noise, 'greater');
+
+  // 쌍 목록에서 거리 행렬을 복원한다 (0..k-1 = 야생형 모델, k..2k-1 = 변이형 모델)
+  const k = Math.max(...rows.map(r=>+r.model_b)) + 1;
+  const N = 2*k, D = new Float64Array(N*N);
+  let filled = 0;
+  for(const r of rows){
+    const i=+r.model_a, j=+r.model_b, v=+r.rmsd_local8A;
+    const [a,b] = r.comparison==='noise_WT'  ? [i, j]
+                : r.comparison==='noise_MUT' ? [k+i, k+j]
+                :                              [i, k+j];
+    if(!D[a*N+b]) filled++;
+    D[a*N+b] = D[b*N+a] = v;
+  }
+  const {p:pMW} = mannWhitneyU(sig, noise, 'greater');
+  // 행렬이 불완전하면 순열을 돌릴 수 없으므로 근사값으로 후퇴한다
+  const perm = filled === N*(N-1)/2 ? permutationP(D, N, k)
+                                    : {p:pMW, method:'mw', nPerm:0};
   const mn=median(noise), ms=median(sig);
-  return {axis:'structure', gene, noise, sig, p, det:p<0.05,
-          mn, ms, d:ms-mn, ratio:ms/mn};
+  return (VERDICT_CACHE[key] = {
+    axis:'structure', gene, noise, sig, p:perm.p, pMW, det:perm.p<0.05,
+    method:perm.method, nPerm:perm.nPerm,
+    mn, ms, d:ms-mn, ratio:ms/mn});
 }
 
 /* 결합 축 원자료의 사례별 대립형질 라벨과 결합 파트너.
@@ -266,18 +361,32 @@ const BIND_ALLELES = {
   PILRA: {wt:'G78', mut:'R78',  lig:'NPDC1'},
 };
 
-/** 결합 축 — 복합체 ipTM. 사례마다 대립형질 라벨이 다르므로 BIND_ALLELES 를 따른다 */
+/** 결합 축 — 복합체 ipTM. 구조 축과 같은 음성 대조군 설계를 쓴다.
+    ipTM 은 구조당 스칼라이므로 쌍 차이 |ipTM_i − ipTM_j| 로 바꿔 쌍 설계에 맞춘다.
+    같은 대립형질 안의 쌍 = 모델 진동(노이즈) · 대립형질 간 쌍 = 변이 신호. */
 async function computeBindingVerdict(gene){
+  const key = 'B:'+gene; if(VERDICT_CACHE[key]) return VERDICT_CACHE[key];
   if(!IPTM) IPTM = await loadCsv('data/boltz_iptm.csv');
   const al = BIND_ALLELES[gene];
   if(!al) return null;                        // 결합 축 원자료가 없는 사례
   const pick = a => IPTM.filter(r=>r.gene===gene && r.allele===a).map(r=>+r.iptm);
   const wt = pick(al.wt), mut = pick(al.mut);
   if(!wt.length || !mut.length) return null;
-  const {p} = mannWhitneyU(mut, wt, 'two-sided');
-  const mw=median(wt), mm=median(mut);
-  return {axis:'binding', gene, wt, mut, p, det:p<0.05,
-          mw, mm, d:mm-mw, spread:Math.max(...wt)-Math.min(...wt)};
+
+  const vals = [...wt, ...mut], N = vals.length, D = new Float64Array(N*N);
+  for(let i=0;i<N;i++) for(let j=0;j<N;j++) D[i*N+j] = Math.abs(vals[i]-vals[j]);
+  const inA = new Uint8Array(N); for(let i=0;i<wt.length;i++) inA[i]=1;
+  const {noise, signal} = splitPairs(D, N, inA);
+
+  const {p:pMW} = mannWhitneyU(signal, noise, 'greater');
+  const perm = permutationP(D, N, wt.length);
+  const mn=median(noise), ms=median(signal), mw=median(wt), mm=median(mut);
+  return (VERDICT_CACHE[key] = {
+    axis:'binding', gene, wt, mut, noise, signal,
+    p:perm.p, pMW, det:perm.p<0.05, method:perm.method, nPerm:perm.nPerm,
+    mn, ms, dPair:ms-mn, ratio:ms/mn,
+    // 원시 ipTM 기술통계 — 화면 4 가 아직 쓴다 (커밋 2 에서 쌍 차이 표시로 교체)
+    mw, mm, d:mm-mw, spread:Math.max(...wt)-Math.min(...wt)});
 }
 
 /* ────────────── 화면 3·4 · 검정 결과 표시 ────────────── */
