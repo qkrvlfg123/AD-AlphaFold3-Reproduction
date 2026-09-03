@@ -15,6 +15,9 @@
 ⚠️ Bret et al. 2026(JCIM)은 Boltz-2가 결합부위 변이에 둔감하다고 보고했다.
    "구분 안 됨"이 나와도 그 자체가 보고할 결과다.
 
+⚠️ CSV는 gene 칼럼을 포함한다 (다사례 확장 대비). 이 스크립트가 수집하지 않은 사례
+   (예: PILRA ± NPDC1)의 행은 기존 CSV에서 읽어 그대로 보존한다 — 재실행해도 날아가지 않는다.
+
 실행: python3 src/analyze_boltz.py
 출력: results/boltz_iptm.csv, results/boltz_summary.md
 """
@@ -47,10 +50,35 @@ def collect() -> list[dict]:
             continue
         allele, seed = m.group(1), int(m.group(2))
         model = int(f.stem.rsplit("_", 1)[-1])
-        row = {"allele": allele, "seed": seed, "model": model}
+        row = {"gene": "TREM2", "allele": allele, "seed": seed, "model": model}
         row.update({k: d.get(k) for k in METRICS})
         rows.append(row)
     return rows
+
+
+FIELDNAMES = ["gene", "allele", "seed", "model"] + METRICS
+
+
+def write_csv(out_csv: Path, rows: list[dict]) -> int:
+    """수집한 행을 쓰되, 이번 실행이 다루지 않은 사례의 기존 행은 보존한다.
+
+    이 스크립트는 TREM2만 수집한다. 단순 덮어쓰기를 하면 CSV에 들어 있는
+    다른 사례(PILRA ± NPDC1 등)가 조용히 사라진다. 그래서 병합해서 쓴다.
+    반환값은 보존한 행 수.
+    """
+    collected = {r["gene"] for r in rows}
+    preserved: list[dict] = []
+    if out_csv.exists():
+        with out_csv.open(newline="", encoding="utf-8") as f:
+            preserved = [r for r in csv.DictReader(f)
+                         if r.get("gene") and r["gene"] not in collected]
+
+    with out_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDNAMES, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+        w.writerows(preserved)
+    return len(preserved)
 
 
 def describe(vals: list[float]) -> str:
@@ -70,10 +98,9 @@ def main() -> int:
 
     RESULTS.mkdir(exist_ok=True)
     out_csv = RESULTS / "boltz_iptm.csv"
-    with out_csv.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
+    n_kept = write_csv(out_csv, rows)
+    if n_kept:
+        print(f"  기존 CSV에서 보존한 타 사례 행: {n_kept}개")
 
     wt = [r for r in rows if r["allele"] == "WT"]
     mu = [r for r in rows if r["allele"] == "R62H"]
