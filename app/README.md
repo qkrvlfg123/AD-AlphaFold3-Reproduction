@@ -165,7 +165,7 @@ SciPy 정확검정과 소수 셋째 자리에서 차이가 날 수 있으나 판
 | 경로 | 내용 | 출처 |
 |---|---|---|
 | `data/rmsd_pairs.csv` | 구조 편차 135쌍 | `src/rmsd_analysis.py` |
-| `data/boltz_iptm.csv` | 인터페이스 검증 40건 (TREM2 30 + PILRA 10) | `src/analyze_boltz.py` |
+| `data/boltz_iptm.csv` | 인터페이스 검증 50건 (TREM2 30 + PILRA 20) | `src/analyze_boltz.py` |
 | `data/confidence_summary.csv` | pLDDT · pTM 전량 | `src/collect_confidence.py` |
 | `data/structures/*.cif` | 예측 구조 (AF3 · Boltz-2) | `../data/` |
 | `data/img/*.png` | WebGL 폴백용 사전 렌더 | `src/pymol_render.py` |
@@ -182,7 +182,7 @@ SciPy 정확검정과 소수 셋째 자리에서 차이가 날 수 있으나 판
 | TREM2 R62H | 구조 | 재현 변동성 초과 (효과크기 미미) | 5.4×10⁻³ |
 | **CD33 R69G** | 구조 | **재현 변동성 내** | 0.54 |
 | **TREM2 R62H + Aβ42** | 인터페이스 | **재현 변동성 내** | 0.30 |
-| **PILRA R78 + NPDC1** | 인터페이스 | **재현 변동성 내** | 0.83 |
+| **PILRA R78 + NPDC1** | 인터페이스 | **재현 변동성 내** | 0.85 |
 
 **CD33 R69G 는 원논문(Yao et al. 2024) 본문 Figure 4B 의 대표 사례다.**
 
