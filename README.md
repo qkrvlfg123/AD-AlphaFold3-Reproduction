@@ -13,7 +13,7 @@ randomization method integrated with AlphaFold3 for 3D structure prediction.*
 |---|---|---|
 | **A. 논문 조사** | 선행 연구 한계·차별성 정리, 인용 문헌 10편 | [선행 연구의 한계](#a--선행-연구의-한계와-본-연구의-차별성-literature-review) · [재현 범위](#a--재현-범위--무엇을-실행했고-무엇을-인용했는가) |
 | **B. 연구** | 가설 설정 · 음성 대조군 · 통계 검정 | [가설과 검정](#b--가설과-검정-research--analysis) · [결과](#결과) |
-| **C. 구현** | Python 스크립트 10개 · 재현 절차 · 예측 구조 60개 | [재현 방법](#c--재현-방법-implementation) · [`src/`](src) · [`data/`](data) |
+| **C. 구현** | Python 스크립트 11개 · 재현 절차 · 예측 구조 60개 | [재현 방법](#c--재현-방법-implementation) · [`src/`](src) · [`data/`](data) |
 | **C. 구현** | **웹 애플리케이션** — UniProt 실시간 검증 · 브라우저 통계 재계산 | [데모](https://mimm-112.github.io/AD-AlphaFold3-Reproduction/app/) · [`app/`](app) |
 
 ---
@@ -22,7 +22,7 @@ randomization method integrated with AlphaFold3 for 3D structure prediction.*
 
 > 논문은 알츠하이머 인과 단백질의 미스센스 변이가 **3D 구조를 바꾼다**고 보고했다.
 > 동일 조건으로 재현한 결과 **그 구조 변화는 모델 자체의 변동과 구분되지 않았고**,
-> 결합 예측 모델(Boltz-2)로 확장해도 **변이를 감별하지 못했다.**
+> 결합 예측 모델(Boltz-2)로 확장해도 **두 복합체 모두에서 변이를 감별하지 못했다.**
 > → 구조 예측으로 변이 효과를 논하기 전에 **모델의 변이 감별력을 먼저 검정해야 한다.**
 
 ---
@@ -68,6 +68,10 @@ randomization method integrated with AlphaFold3 for 3D structure prediction.*
 
 ### 3. 결합 축 — Boltz-2도 감별 실패
 
+두 복합체를 같은 프로토콜로 검정했고 **둘 다 감별하지 못했다.**
+
+#### 3-1. TREM2 + Aβ42
+
 TREM2 Ig 도메인(19–130) + Aβ42(APP 672–713) 복합체, 시드 3 × 모델 5 = 30 구조.
 
 | 지표 | WT | R62H | p | 판정 |
@@ -77,6 +81,44 @@ TREM2 Ig 도메인(19–130) + Aβ42(APP 672–713) 복합체, 시드 3 × 모�
 | pTM | 0.935 | 0.923 | 0.65 | 구분 안 됨 |
 
 복합체 예측 자체는 성공했다(ipTM 0.85는 높은 값). **변이 감별력만 없다.**
+
+#### 3-2. PILRA + NPDC1
+
+PILRA Ig 도메인(32–150) + NPDC1 세포외 도메인(35–181) 복합체, 시드 1 × 모델 5 = 10 구조.
+
+| 지표 | G78 (정상형) | R78 (변이형) | p | 판정 |
+|---|---|---|---|---|
+| **ipTM** (결합면 신뢰도) | 0.879 | 0.896 | **0.83** | 구분 안 됨 |
+
+- **변이 방향** — UniProt 정본(Q9UKJ1)이 **이미 R78**이라 정상형이 G78이다.
+  문헌 표기 `G78R`과 방향이 반대이므로 WT/MUT 대신 잔기 이름으로 표기했다.
+- **p 값 표기** — 0.83은 앱과 동일한 정규근사값이고 **정확검정은 0.8413**(U = 11.0, n = 5 + 5)이다.
+  n이 작아 두 값이 갈리지만 판정은 동일하다.
+- 본 저장소에는 PILRA 복합체의 **ipTM 수치만 수록**했고 구조 파일(.cif)은 포함하지 않았다.
+
+**⚠️ 이 결과는 글리칸 부재 때문일 수 있다 (추정).**
+PILRA의 리간드 인식은 **시알산 매개**이고 78번 잔기가 그 시알산 결합 부위에 있다.
+그런데 Boltz-2 단백질–단백질 예측에는 **글리칸이 없다.**
+따라서 이 미감별이 **모델의 감별 한계** 때문인지 **글리칸이 빠졌기 때문**인지
+이 결과만으로는 구분할 수 없다. 실험 문헌은 50% 이상의 결합 감소를 보고한다
+(Rathore N, et al. 2018, *PLoS Genet* 14(11):e1007427).
+
+### 4. 교차검증 — 2×2 종합 판정
+
+두 축의 판정을 **합성하지 않고 교차 배치**한다. 구조 축은 단측(신호 > 노이즈),
+결합 축은 양측 검정이라 귀무가설이 다르기 때문이다.
+
+| | 결합 축 — 변동성 초과 | 결합 축 — 변동성 내 |
+|---|---|---|
+| **구조 축 — 변동성 초과** | 해당 사례 없음 | **TREM2 R62H** (+Aβ42) · **PILRA R78** (+NPDC1) |
+| **구조 축 — 변동성 내** | 해당 사례 없음 | 해당 사례 없음 |
+
+**결합 축 미측정** — CD33 R69G (결합 파트너 문헌 확정 필요).
+미측정은 미감별과 다른 상태이므로 매트릭스에 배치하지 않았다.
+
+현재 채워진 칸은 **"구조는 초과, 결합은 미감별"** 하나다.
+두 사례 모두 구조 편차는 음성 대조군을 넘었으나 결합 신뢰도 차이는 넘지 못했다.
+웹 애플리케이션의 리포트 화면(`?s=s5`)에서 같은 매트릭스를 확인할 수 있다.
 
 ---
 
@@ -88,6 +130,7 @@ TREM2 Ig 도메인(19–130) + Aβ42(APP 672–713) 복합체, 시드 3 × 모�
 | AlphaFold 한계 (Buel 2022) | AF2가 미스센스 변이에 둔감함을 지적 | **정량화**하여 단백질별 판정 |
 | Boltz-2 한계 (Bret 2026) | affinity가 결합부위 변이에 둔감함을 보고 | **AD 표적에서 독립 확인** |
 | 실험 문헌 (Zhao 2018 등) | R62H가 Aβ 결합을 감소시킴 | 두 예측 모델 모두 이를 **못 잡음**을 확인 |
+| 실험 문헌 (Rathore 2018) | PILRA G78R이 리간드 결합을 50% 이상 감소시킴 | 예측 모델이 **못 잡음** — 글리칸 부재로 추정 |
 
 **본 연구의 기여**: 구조·결합 두 축에서 동일한 검정 프로토콜을 적용해,
 예측 모델의 **변이 감별력 자체를 측정하는 절차**를 제시했다.
@@ -182,7 +225,8 @@ python3 src/make_slide_tables.py
 python3 src/make_slide_charts.py
 
 # 6. Boltz-2 확장 (Colab T4) — notebooks/02_boltz_trem2_ab42.ipynb
-python3 src/make_boltz_inputs.py
+python3 src/make_boltz_inputs.py         # TREM2 ± Aβ42
+python3 src/make_boltz_npdc1_inputs.py   # PILRA ± NPDC1
 python3 src/analyze_boltz.py
 
 # 7. 웹 애플리케이션 로컬 실행
@@ -210,8 +254,9 @@ src/
   compose_figure.py       논문 레이아웃으로 합성
   make_slide_tables.py    슬라이드용 표 생성 + 통계 검정
   make_slide_charts.py    노이즈/신호 분포 차트
-  make_boltz_inputs.py    Boltz-2 입력 YAML 생성
-  analyze_boltz.py        ipTM 집계 + 검정
+  make_boltz_inputs.py    Boltz-2 입력 YAML 생성 (TREM2 ± Aβ42)
+  make_boltz_npdc1_inputs.py  Boltz-2 입력 YAML 생성 (PILRA ± NPDC1)
+  analyze_boltz.py        ipTM 집계 + 검정 (타 사례 행은 보존)
 
 notebooks/
   02_boltz_trem2_ab42.ipynb   Colab T4용 Boltz-2 실행 노트북
