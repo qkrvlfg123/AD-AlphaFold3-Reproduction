@@ -252,14 +252,25 @@ async function computeStructureVerdict(gene){
           mn, ms, d:ms-mn, ratio:ms/mn};
 }
 
-/** 결합 축 — TREM2 + Aβ42 복합체 ipTM. 원자료가 TREM2 단일 사례 전제(gene 칼럼 없음) */
-async function computeBindingVerdict(){
+/* 결합 축 원자료의 사례별 대립형질 라벨과 결합 파트너.
+   ⚠️ PILRA 는 UniProt 정본이 이미 R78 이라 정상형이 G78 이다 (문헌 표기는 G78R).
+      inputs/boltz/README_NPDC1.md 의 명명 규칙과 같다. */
+const BIND_ALLELES = {
+  TREM2: {wt:'WT',  mut:'R62H', lig:'Aβ42'},
+  PILRA: {wt:'G78', mut:'R78',  lig:'NPDC1'},
+};
+
+/** 결합 축 — 복합체 ipTM. 사례마다 대립형질 라벨이 다르므로 BIND_ALLELES 를 따른다 */
+async function computeBindingVerdict(gene){
   if(!IPTM) IPTM = await loadCsv('data/boltz_iptm.csv');
-  const wt  = IPTM.filter(r=>r.allele==='WT').map(r=>+r.iptm);
-  const mut = IPTM.filter(r=>r.allele==='R62H').map(r=>+r.iptm);
+  const al = BIND_ALLELES[gene];
+  if(!al) return null;                        // 결합 축 원자료가 없는 사례
+  const pick = a => IPTM.filter(r=>r.gene===gene && r.allele===a).map(r=>+r.iptm);
+  const wt = pick(al.wt), mut = pick(al.mut);
+  if(!wt.length || !mut.length) return null;
   const {p} = mannWhitneyU(mut, wt, 'two-sided');
   const mw=median(wt), mm=median(mut);
-  return {axis:'binding', gene:'TREM2', wt, mut, p, det:p<0.05,
+  return {axis:'binding', gene, wt, mut, p, det:p<0.05,
           mw, mm, d:mm-mw, spread:Math.max(...wt)-Math.min(...wt)};
 }
 
@@ -317,7 +328,7 @@ async function renderStructureAxis(gene){
 }
 
 async function renderBindingAxis(){
-  const v = await computeBindingVerdict();
+  const v = await computeBindingVerdict('TREM2');   // s4 화면은 TREM2 전용
   const {p, det, mw, mm, d, spread, wt, mut} = v;
 
   $('#bScore').innerHTML = `
@@ -456,14 +467,20 @@ async function renderReport(){
       <td class="n mono">${fmtP(p)}</td>
       <td><span class="badge ${det?'sig':'ns'}">${det?'변동성 초과':'변동성 내'}</span></td></tr>`;
   }
-  const b = await computeBindingVerdict();
-  html+=`<tr><td><b>TREM2</b> <span class="mono muted">R62H + Aβ42</span></td>
-    <td class="mono">인터페이스</td><td class="n mono">${b.spread.toFixed(3)}</td>
-    <td class="n mono">${Math.abs(b.d).toFixed(3)}</td>
-    <td class="n mono">—</td><td class="n mono">${fmtP(b.p)}</td>
-    <td><span class="badge ${b.det?'sig':'ns'}">${b.det?'변동성 초과':'변동성 내'}</span></td></tr>`;
+  const bv={};                       // 사례별 결합 축 판정 — 매트릭스에서 재사용한다
+  for(const g of BIND_MEASURED){
+    const b = await computeBindingVerdict(g);
+    if(!b) continue;
+    bv[g]=b;
+    const al=BIND_ALLELES[g];
+    html+=`<tr><td><b>${g}</b> <span class="mono muted">${al.mut} + ${al.lig}</span></td>
+      <td class="mono">인터페이스</td><td class="n mono">${b.spread.toFixed(3)}</td>
+      <td class="n mono">${Math.abs(b.d).toFixed(3)}</td>
+      <td class="n mono">—</td><td class="n mono">${fmtP(b.p)}</td>
+      <td><span class="badge ${b.det?'sig':'ns'}">${b.det?'변동성 초과':'변동성 내'}</span></td></tr>`;
+  }
   $('#rTable').innerHTML=html;
-  renderVerdictMatrix(sv, b);        // 위에서 구한 판정을 그대로 넘긴다 (재계산 없음)
+  renderVerdictMatrix(sv, bv);       // 위에서 구한 판정을 그대로 넘긴다 (재계산 없음)
 }
 
 /* ────────────── 종합 판정 매트릭스 (2×2) ──────────────
@@ -473,31 +490,36 @@ async function renderReport(){
    결합 축 원자료(boltz_iptm.csv)는 gene 칼럼이 없는 TREM2 단일 사례 전제다.
    CD33·PILRA 는 '결합 미측정' 으로 매트릭스 밖에 둔다.
    미측정과 미감별은 다른 상태이므로 빈칸을 '차이 없음' 으로 표시하지 않는다. */
-const BIND_MEASURED = ['TREM2'];     // 결합 축 예측을 실제로 돌린 사례
+const BIND_MEASURED = ['TREM2', 'PILRA'];   // 결합 축 예측을 실제로 돌린 사례
 const CELL_HINT = {                  // 빈칸에 표시할 향후 배치 후보
-  'true|true'  : 'PILRA 결합 예측 시 후보',
-  'true|false' : 'PILRA 결합 예측 시 후보',
+  // 남은 미측정 사례는 CD33 하나이고 구조 축이 변동성 내이므로 아래 행에만 후보가 된다
   'false|true' : 'CD33 결합 예측 시 후보',
   'false|false': 'CD33 결합 예측 시 후보',
 };
+const CELL_NOTE = {                  // 칸 안에 함께 표시할 추정 — 단정하지 않는다
+  PILRA: 'PILRA 결합은 시알산 매개인데 Boltz-2 단백질–단백질 예측에는 글리칸이 없어 '
+       + '그 효과를 볼 수 없습니다. 모델의 감별 한계와 글리칸 부재를 이 결과만으로는 구분할 수 없습니다. '
+       + '<span class="mono">Rathore 2018, PLoS Genet 14:e1007427</span> — R78 이 리간드 결합 50% 이상 감소',
+};
 
-function renderVerdictMatrix(sv, b){
+function renderVerdictMatrix(sv, bv){
   // 어느 칸인지는 실측 판정에서 유도한다 — 위치를 하드코딩하지 않는다.
   // 결합 예측이 추가되거나 판정이 바뀌면 칸도 따라 움직인다.
   const placed={};
   BIND_MEASURED.forEach(g=>{
-    if(!sv[g]) return;
-    (placed[`${sv[g].det}|${b.det}`] ||= []).push(g);
+    if(!sv[g] || !bv[g]) return;
+    (placed[`${sv[g].det}|${bv[g].det}`] ||= []).push(g);
   });
 
   const cell = key => {
     const occ = placed[key] || [];
-    if(!occ.length) return `<td class="mcell"><span class="muted">해당 사례 없음</span>
-      <div class="mhint">${CELL_HINT[key]}</div></td>`;
+    if(!occ.length) return `<td class="mcell"><span class="muted">해당 사례 없음</span>${
+      CELL_HINT[key] ? `<div class="mhint">${CELL_HINT[key]}</div>` : ''}</td>`;
     return `<td class="mcell on">${occ.map(g=>{
-      const c=CASES[g];
-      return `<div class="mcase"><b>${g}</b> <span class="mono">${c.wt}${c.pos}${c.mut}</span> ✔</div>
-        <div class="mhint">구조 p = ${fmtP(sv[g].p)} · 결합 p = ${fmtP(b.p)}</div>`;
+      const al=BIND_ALLELES[g];
+      return `<div class="mcase"><b>${g}</b> <span class="mono">${al.mut}</span> ✔</div>
+        <div class="mhint">구조 p = ${fmtP(sv[g].p)} · 결합 p = ${fmtP(bv[g].p)} <span class="muted">(+ ${al.lig})</span></div>${
+        CELL_NOTE[g] ? `<div class="mnote"><b>추정</b> — ${CELL_NOTE[g]}</div>` : ''}`;
     }).join('')}</td>`;
   };
 
