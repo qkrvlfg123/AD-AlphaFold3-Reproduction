@@ -6,10 +6,11 @@
   ptm             복합체 전체
   complex_plddt   복합체 전체 pLDDT
 
-검정 설계
-  ipTM은 구조당 스칼라 하나이므로 RMSD처럼 쌍으로 만들 필요가 없다.
-  같은 서열 15개(시드 3 × 모델 5)의 흩어짐이 곧 노이즈 바닥이고,
-  WT 15개 vs R62H 15개를 Mann–Whitney U로 직접 비교한다.
+검정 설계 (2026-09-04 전환 — 구조 축과 통일)
+  ipTM은 구조당 스칼라이므로 쌍 차이 |ipTM_i − ipTM_j| 로 바꿔 쌍 설계에 맞춘다.
+  같은 대립형질 안의 쌍 = 모델 진동(음성 대조군), 대립형질 간 쌍 = 변이 신호.
+  통계량은 median(신호) − median(노이즈) 이고 **라벨 순열검정**으로 p 를 구한다.
+  쌍은 서로 독립이 아니므로 Mann–Whitney 의 p 는 과소평가된다 — src/detectability.py 참조.
 
 ⚠️ affinity 수치는 없다. Boltz-2 affinity head는 저분자 전용이고 Aβ42는 펩타이드다.
 ⚠️ Bret et al. 2026(JCIM)은 Boltz-2가 결합부위 변이에 둔감하다고 보고했다.
@@ -31,7 +32,8 @@ import statistics as st
 import sys
 from pathlib import Path
 
-from scipy.stats import mannwhitneyu
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from detectability import verdict_from_scalars  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SEARCH = ROOT / "notebooks" / "boltz_results" / "outputs"
@@ -86,66 +88,94 @@ def describe(vals: list[float]) -> str:
             f"(min {min(vals):.3f} / max {max(vals):.3f}, n={len(vals)})")
 
 
-def main() -> int:
-    if not SEARCH.exists():
-        print(f"결과 폴더 없음: {SEARCH}")
-        return 1
+ALLELES = {                      # gene -> (기준 대립형질, 비교 대립형질, 결합 파트너)
+    "TREM2": ("WT", "R62H", "Aβ42"),
+    "PILRA": ("G78", "R78", "NPDC1"),
+}
 
-    rows = collect()
-    if not rows:
-        print("confidence json 을 못 찾았다.")
-        return 1
 
-    RESULTS.mkdir(exist_ok=True)
-    out_csv = RESULTS / "boltz_iptm.csv"
-    n_kept = write_csv(out_csv, rows)
-    if n_kept:
-        print(f"  기존 CSV에서 보존한 타 사례 행: {n_kept}개")
-
-    wt = [r for r in rows if r["allele"] == "WT"]
-    mu = [r for r in rows if r["allele"] == "R62H"]
-
+def summarize(out_csv: Path) -> list[str]:
+    """CSV 에 들어 있는 모든 사례로 요약 마크다운을 만든다."""
+    rows = list(csv.DictReader(out_csv.open(encoding="utf-8")))
     lines: list[str] = []
     A = lines.append
 
-    A("# Boltz-2 결과 · TREM2 ± Aβ42 결합 신뢰도\n")
-    A(f"구조 {len(rows)}개 (WT {len(wt)} + R62H {len(mu)}) · "
-      f"시드 {sorted({r['seed'] for r in rows})} × 모델 5개")
-    A("입력: TREM2 Ig 도메인 19–130 (112 aa) + Aβ42 (42 aa) = 154 aa\n")
+    A("# Boltz-2 결과 · 결합 신뢰도 감별력 검정\n")
+    A("**검정 설계** — 구조 축과 동일하다. 같은 대립형질 안의 쌍 = 모델 진동(음성 대조군),")
+    A("대립형질 간 쌍 = 변이 신호. 통계량은 median(신호) − median(노이즈) 이고")
+    A("**라벨 순열검정**으로 p 를 구한다 — 쌍이 서로 독립이 아니라 Mann–Whitney 는 과소평가한다.")
+    A("`src/detectability.py` 와 `app/app.js` 가 같은 엔진·같은 PRNG 를 써 p 가 자릿수까지 일치한다.\n")
 
-    A("## 지표별 비교\n")
-    A("| 지표 | WT | R62H | 중앙값 차 | Mann–Whitney p | 판정 |")
-    A("|---|---|---|---|---|---|")
-
-    verdicts = {}
-    for k in METRICS:
-        a = [r[k] for r in wt if r[k] is not None]
-        b = [r[k] for r in mu if r[k] is not None]
-        if not a or not b:
+    for gene in sorted({r["gene"] for r in rows}):
+        if gene not in ALLELES:
             continue
-        # 양측: 어느 쪽으로든 다르면 잡는다 (방향은 중앙값 차로 본다)
-        _, p = mannwhitneyu(a, b, alternative="two-sided")
-        diff = st.median(b) - st.median(a)
-        sep = p < 0.05
-        verdicts[k] = (st.median(a), st.median(b), diff, p, sep)
-        A(f"| **{k}** | {describe(a)} | {describe(b)} | {diff:+.3f} | {p:.3g} | "
-          f"{'다름' if sep else '**구분 안 됨**'} |")
+        a_lab, b_lab, lig = ALLELES[gene]
+        g = [r for r in rows if r["gene"] == gene]
+        na = sum(1 for r in g if r["allele"] == a_lab)
+        nb = sum(1 for r in g if r["allele"] == b_lab)
+        seeds = sorted({int(r["seed"]) for r in g})
 
-    A("\n## 해석\n")
-    mi = verdicts.get("iptm")
-    if mi:
-        wt_m, mu_m, diff, p, sep = mi
-        A(f"- **ipTM** — 결합 지표. WT {wt_m:.3f} vs R62H {mu_m:.3f} (차이 {diff:+.3f}), p = {p:.3g}")
-        if sep:
-            direction = "낮아졌다" if diff < 0 else "높아졌다"
-            A(f"  → 변이형에서 결합 신뢰도가 통계적으로 유의하게 **{direction}**.")
-            if diff < 0:
-                A("  → 실험 보고(Zhao 2018 · Zhong 2018: AD 변이가 Aβ 결합 감소)와 **방향 일치**.")
-            else:
-                A("  → ⚠️ 실험 보고와 **방향이 반대**다. 해석에 주의.")
+        A(f"## {gene} ± {lig}\n")
+        A(f"구조 {len(g)}개 ({a_lab} {na} + {b_lab} {nb}) · 시드 {seeds} × 모델 5개\n")
+        A("| 지표 | 음성 대조군 (같은 대립형질 쌍) | 처리군 (대립형질 간 쌍) | 비 | 순열 p | 판정 |")
+        A("|---|---|---|---|---|---|")
+
+        iptm_v = None
+        for k in METRICS:
+            a = [float(r[k]) for r in g if r["allele"] == a_lab and r.get(k)]
+            b = [float(r[k]) for r in g if r["allele"] == b_lab and r.get(k)]
+            if len(a) < 2 or len(b) < 2:
+                continue
+            v = verdict_from_scalars(a, b)
+            if k == "iptm":
+                iptm_v = v
+            A(f"| **{k}** | {v['mn']:.4f} (n={len(v['noise'])}쌍) "
+              f"| {v['ms']:.4f} (n={len(v['signal'])}쌍) | {v['ratio']:.2f}× "
+              f"| {v['p']:.4f} | {'**감별됨**' if v['det'] else '**구분 안 됨**'} |")
+
+        ia = [float(r["iptm"]) for r in g if r["allele"] == a_lab]
+        ib = [float(r["iptm"]) for r in g if r["allele"] == b_lab]
+        A(f"\n원시 ipTM 중앙값 — {a_lab} {st.median(ia):.3f} "
+          f"(범위 {min(ia):.3f}–{max(ia):.3f}) / "
+          f"{b_lab} {st.median(ib):.3f} (범위 {min(ib):.3f}–{max(ib):.3f})\n")
+
+        if iptm_v is None:
+            continue
+        A(f"검정 방식: {iptm_v['method']} · {iptm_v['n_perm']:,}"
+          + (f" (도달 가능한 최소 p = {1/iptm_v['n_perm']:.4f})" if iptm_v["method"] == "exact" else "")
+          + "\n")
+        if iptm_v["det"]:
+            A("→ 변이 쌍 차이가 모델 진동을 통계적으로 **초과했다.**\n")
         else:
-            A("  → **Boltz-2가 이 변이를 구분하지 못했다.**")
-            A("  → Bret et al. 2026(JCIM)이 보고한 '결합부위 변이 둔감성'과 일치하는 결과.")
+            A(f"→ **Boltz-2 가 이 변이를 감별하지 못했다.** (비 {iptm_v['ratio']:.2f}×"
+              + (", 1.0 미만 — 변이 쌍 차이가 같은 서열 쌍 차이보다도 작다)" if iptm_v["ratio"] < 1 else ")"))
+            A("→ 결합 변화가 없다는 뜻이 아니라 **이 모델이 변이를 감지하지 못한다**는 뜻이다.\n")
+
+    return lines
+
+
+def main() -> int:
+    RESULTS.mkdir(exist_ok=True)
+    out_csv = RESULTS / "boltz_iptm.csv"
+
+    # 원자료가 있으면 수집해 CSV 를 갱신하고, 없으면 기존 CSV 로 요약만 다시 만든다.
+    if SEARCH.exists():
+        rows = collect()
+        if rows:
+            n_kept = write_csv(out_csv, rows)
+            print(f"수집 {len(rows)}행"
+                  + (f" · 기존 CSV 에서 보존한 타 사례 행 {n_kept}개" if n_kept else ""))
+        else:
+            print("confidence json 을 못 찾았다 — 기존 CSV 로 요약만 갱신한다.")
+    else:
+        print(f"원자료 폴더 없음 ({SEARCH.relative_to(ROOT)}) — 기존 CSV 로 요약만 갱신한다.")
+
+    if not out_csv.exists():
+        print("results/boltz_iptm.csv 가 없다. 원자료 수집이 먼저다.")
+        return 1
+
+    lines = summarize(out_csv)
+    A = lines.append
 
     A("\n## 반드시 함께 보고할 한계\n")
     A("1. **affinity 수치가 아니다.** Boltz-2 affinity head는 저분자 전용이고 "
@@ -155,6 +185,9 @@ def main() -> int:
     A("3. **King et al. 2025** — Boltz-2를 단백질–단백질 친화도로 미세조정해도 "
       "서열 기반 모델보다 성능이 낮았다.")
     A("4. 실험적 검증 없음. 예측 대 예측 비교다.")
+    A("5. **PILRA 는 글리칸 부재가 겹친다 (추정).** PILRA 의 리간드 인식은 시알산 매개인데 "
+      "Boltz-2 단백질–단백질 예측에는 글리칸이 없다. 미감별이 모델 한계 때문인지 "
+      "글리칸 부재 때문인지 이 결과만으로는 구분할 수 없다.")
 
     A("\n## 근거 문헌\n")
     A("- Zhao et al. 2018, *Neuron* — TREM2가 Aβ 올리고머에 나노몰 결합, AD 변이가 결합 감소")
@@ -162,8 +195,10 @@ def main() -> int:
     A("- Yeh et al. 2016, *Neuron* — TREM2–APOE/CLU/LDL 결합, 질병 변이가 저해")
     A("- Passaro et al. 2025 — Boltz-2 (MIT, FEP 근접 성능)")
     A("- Bret et al. 2026, *JCIM* — Boltz-2 결합부위 변이 둔감성")
+    A("- Rathore N, et al. 2018, *PLoS Genet* 14(11):e1007427 — "
+      "PILRA G78R 이 시알산 결합 잔기를 바꿔 NPDC1 등 리간드 결합을 50% 이상 감소")
 
-    (RESULTS / "boltz_summary.md").write_text("\n".join(lines) + "\n")
+    (RESULTS / "boltz_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     print(f"\n저장 → {out_csv.relative_to(ROOT)}, results/boltz_summary.md")
     return 0
