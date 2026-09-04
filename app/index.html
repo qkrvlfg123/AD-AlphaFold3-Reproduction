@@ -384,7 +384,7 @@ footer{border-top:1px solid var(--line);padding:20px 28px;font-size:11.5px;color
   </div>
 
   <div class="grid g2b" style="margin-top:16px">
-    <div class="panel"><h3>ipTM 분포</h3><div class="body" id="bPlot"></div></div>
+    <div class="panel"><h3>쌍 차이 분포 — 기준 반복 vs 변이 비교</h3><div class="body" id="bPlot"></div></div>
     <div class="panel"><h3>관련 실험 문헌</h3><div class="body">
       <div class="cite"><b>Zhao et al. (2018)</b> <i>Neuron</i> — TREM2가 Aβ 올리고머에 나노몰 친화도로 결합하며 AD 변이가 결합을 감소시킴</div>
       <div class="cite"><b>Zhong et al. (2018)</b> <i>Mol Neurodegener</i> — 결합에 필수적인 잔기 구간 31–91 (R62 포함)</div>
@@ -393,6 +393,8 @@ footer{border-top:1px solid var(--line);padding:20px 28px;font-size:11.5px;color
   </div>
 
   <div class="disclaimer">
+    <b>검정 설계</b> — 구조 축과 동일합니다. 같은 서열을 반복 예측한 구조끼리의 ipTM 쌍 차이를
+    음성 대조군(모델 진동)으로 삼고, 대립형질 간 쌍 차이가 이를 초과하는지 라벨 순열검정으로 판정합니다.<br>
     <b>지표 정의</b> — ipTM 은 결합 자유에너지가 아닌 인터페이스 예측 신뢰도 지표입니다.
     Boltz-2 affinity head 는 small-molecule 전용이므로 펩타이드에는 적용되지 않으며, 결합 친화도 수치는 산출되지 않습니다.
     결합 변화 여부에 대한 판단은 제공하지 않습니다.
@@ -430,8 +432,8 @@ footer{border-top:1px solid var(--line);padding:20px 28px;font-size:11.5px;color
       <tr><td>구조 검증 모델</td><td class="mono">AlphaFold Server (AF3)</td></tr>
       <tr><td>인터페이스 검증 모델</td><td class="mono">Boltz-2 2.2.1</td></tr>
       <tr><td>시드</td><td class="mono">구조 1 · 인터페이스 1–3</td></tr>
-      <tr><td>샘플 수</td><td class="mono">조건당 5</td></tr>
-      <tr><td>검정</td><td class="mono">Mann–Whitney U · α = 0.05</td></tr>
+      <tr><td>샘플 수</td><td class="mono">구조 5 · 인터페이스 TREM2 15 / PILRA 10</td></tr>
+      <tr><td>검정</td><td class="mono">라벨 순열검정 · 단측 · α = 0.05</td></tr>
       <tr><td>원자료</td><td class="mono">rmsd_pairs.csv · boltz_iptm.csv</td></tr>
     </table></div></div>
   </div>
@@ -454,9 +456,14 @@ footer{border-top:1px solid var(--line);padding:20px 28px;font-size:11.5px;color
       <tr><td>대립가설 H₁</td><td>변이형의 구조적 편차가 재현 변동성을 초과한다</td></tr>
       <tr><td><b>음성 대조군</b></td><td><b>동일 서열의 모델 쌍</b> — 변이가 없으므로 관측 편차는 전부 모델 변동이다</td></tr>
       <tr><td>처리군</td><td>야생형 × 변이형 구조 쌍</td></tr>
-      <tr><td>검정</td><td>Mann–Whitney U · 구조 단측 / 인터페이스 양측 · α = 0.05</td></tr>
+      <tr><td>검정</td><td><b>라벨 순열검정</b> · 두 축 모두 단측 · α = 0.05<br>
+        <span class="muted">쌍은 서로 독립이 아니므로(같은 구조가 여러 쌍에 재사용됨) Mann–Whitney 의 p 는
+        과소평가된다. 라벨을 뒤섞어 얻은 경험 분포로 교정한다. 분할 수가 적으면 전수 열거, 많으면
+        고정 시드 표본 20,000회 — 둘 다 결정적이다.</span></td></tr>
+      <tr><td>도달 가능한 최소 p</td><td>조건당 모델 5개면 전수 분할이 126개이므로
+        <b>최소 p 는 1/126 = 0.0079</b> 다. 그보다 작은 p 를 주장하려면 모델 수를 늘려야 한다.</td></tr>
       <tr><td>통제 변수</td><td>동일 도구 · 동일 서열 구간 · 시드 고정 · 동일 샘플 수</td></tr>
-      <tr><td>지표</td><td>구조 — 국소 RMSD (Cα, 8 Å) / 인터페이스 — ipTM</td></tr>
+      <tr><td>지표</td><td>구조 — 국소 RMSD (Cα, 8 Å) 쌍 / 인터페이스 — ipTM 쌍 차이 |Δ|</td></tr>
     </table></div></div>
 
   <div class="panel" style="margin-top:16px"><h3>존재 근거 — 기존 신뢰도 지표는 변이 감별력을 보장하지 않는다</h3>
