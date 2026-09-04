@@ -200,7 +200,7 @@ MR-SPI 자체는 **오픈소스로 공개되어 있어 코드 접근에는 제�
 | UniProt 조회 및 잔기 대조 검증 | **실동작 · 임의 accession** |
 | 변이 서열 생성 · 도메인 자동 절단 | 실동작 |
 | 입력 파일 배포 (FASTA · AF Server JSON · Boltz YAML) | 실동작 |
-| 감별력 검정 재계산 (Mann–Whitney U) | 실동작 — 원자료 CSV에서 브라우저가 계산 |
+| 감별력 검정 재계산 (라벨 순열검정) | 실동작 — 원자료 CSV에서 브라우저가 계산 |
 | 3D 구조 뷰어 (Mol\*) | 실동작 — WebGL 미지원 시 사전 렌더 폴백 |
 | 구조 예측 실행 | 미구현 (GPU 필요) |
 
@@ -284,7 +284,7 @@ notebooks/
 
 app/        BlindSpot 웹 애플리케이션 (정적 배포)
   index.html              5화면 UI
-  app.js                  UniProt 검증 · Mann–Whitney U · Mol* 뷰어
+  app.js                  UniProt 검증 · 라벨 순열검정 · Mol* 뷰어
   data/                   원자료 CSV · 구조 파일 · 폴백 이미지
 
 inputs/     FASTA · AF Server JSON · Boltz YAML
