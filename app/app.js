@@ -3,7 +3,7 @@
  * 실제로 동작하는 부분:
  *   · UniProt REST 조회 및 잔기 대조 검증  → 임의 accession 가능
  *   · 변이 서열 생성 및 입력 파일 배포
- *   · CSV 원자료 기반 Mann–Whitney U 재계산
+ *   · CSV 원자료 기반 순열검정 재계산
  *   · Mol* 로 실측 구조 로드
  * 미구현: 구조 예측 실행 (GPU 필요)
  */
@@ -409,7 +409,7 @@ async function renderStructureAxis(gene){
     <div class="kpis">
       <div class="kpi"><div class="kl">p-value</div>
         <div class="kv mono">${fmtP(p)}</div>
-        <div class="kn">Mann–Whitney U · 단측 · α = 0.05</div></div>
+        <div class="kn">${methodNote(v)}</div></div>
       <div class="kpi"><div class="kl">편차 Δ</div>
         <div class="kv mono">${d>=0?'+':''}${d.toFixed(3)} <span style="font-size:15px">Å</span></div>
         <div class="kn">${det?`Cα–Cα 결합거리의 약 ${Math.round(Math.abs(d)/1.5*100)}%`:'기준 변동 범위 이내'}</div></div>
@@ -422,7 +422,7 @@ async function renderStructureAxis(gene){
     </div>
     <div class="foot">${det
       ? '귀무가설을 기각합니다. 다만 효과크기를 함께 확인하십시오.'
-      : '귀무가설을 기각하지 못했습니다. 구조 불변이 아니라 본 모델의 감별 한계를 의미합니다.'}</div>
+      : '귀무가설을 기각하지 못했습니다. 구조 불변이 아니라 본 모델의 감별 한계를 의미합니다.'}${floorNote(v)}</div>
    </div>`;
 
   $('#sCond').innerHTML = `
@@ -430,7 +430,10 @@ async function renderStructureAxis(gene){
     <tr><td>입력 구간</td><td class="mono">UniProt ${c.acc} 전장 (${c.len} aa)</td></tr>
     <tr><td>시드 / 샘플</td><td class="mono">seed 1 · n = 5</td></tr>
     <tr><td>정렬 구간</td><td class="mono">도메인 ${c.domain[0]}–${c.domain[1]} Cα</td></tr>
-    <tr><td>컷오프</td><td class="mono">8 Å (변이 잔기 기준)</td></tr>`;
+    <tr><td>컷오프</td><td class="mono">8 Å (변이 잔기 기준)</td></tr>
+    <tr><td>검정</td><td class="mono">라벨 순열검정 · ${v.method==='exact'
+        ? `정확 ${v.nPerm}분할 · 최소 가능 p ${pFloor(v).toFixed(4)}`
+        : `표본 ${v.nPerm.toLocaleString()}회`}</td></tr>`;
 
   drawStrip('#sPlot', [
     {label:'기준 반복', vals:noise, color:'#2a78d6'},
@@ -444,38 +447,44 @@ async function renderStructureAxis(gene){
 
 async function renderBindingAxis(){
   const v = await computeBindingVerdict('TREM2');   // s4 화면은 TREM2 전용
-  const {p, det, mw, mm, d, spread, wt, mut} = v;
+  const {p, det, mn, ms, ratio, noise, signal, mw, mm, wt, mut} = v;
 
   $('#bScore').innerHTML = `
    <div class="score ${det?'sig':'ns'}">
     <div class="top">
       <div class="verdict">${det?'재현 변동성 초과':'재현 변동성 내'}</div>
       <div class="vsub">${det
-        ? '변이로 인한 ipTM 차이가 재현 변동을 초과합니다'
-        : '변이로 인한 ipTM 차이가 모델 재현 변동에 포섭됩니다'}</div>
+        ? '변이로 인한 ipTM 편차가 모델 재현 변동을 통계적으로 초과합니다'
+        : '변이로 인한 ipTM 편차가 모델 재현 변동과 구분되지 않습니다'}</div>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="kl">p-value</div>
         <div class="kv mono">${fmtP(p)}</div>
-        <div class="kn">Mann–Whitney U · 양측 · α = 0.05</div></div>
-      <div class="kpi"><div class="kl">ipTM 차이 Δ</div>
-        <div class="kv mono">${d>=0?'+':''}${d.toFixed(3)}</div>
-        <div class="kn">기준 분산 폭 ${spread.toFixed(3)}</div></div>
+        <div class="kn">${methodNote(v)}</div></div>
+      <div class="kpi"><div class="kl">신호 / 노이즈 비</div>
+        <div class="kv mono">${ratio.toFixed(2)}×</div>
+        <div class="kn">${ratio < 1
+          ? '1.0 미만 — 변이 쌍 차이가 같은 서열 쌍 차이보다도 작습니다'
+          : '1.0 초과 — 변이 쌍 차이가 더 큽니다'}</div></div>
     </div>
     <div class="rows">
-      ${row('야생형 ipTM (n='+wt.length+')', mw.toFixed(3))}
-      ${row('범위', Math.min(...wt).toFixed(3)+' – '+Math.max(...wt).toFixed(3),1)}
-      ${row('변이형 ipTM (n='+mut.length+')', mm.toFixed(3))}
-      ${row('범위', Math.min(...mut).toFixed(3)+' – '+Math.max(...mut).toFixed(3),1)}
+      ${row('기준 반복 변동 (n='+noise.length+'쌍)', mn.toFixed(3))}
+      ${row('범위', Math.min(...noise).toFixed(3)+' – '+Math.max(...noise).toFixed(3), 1)}
+      ${row('변이 비교 편차 (n='+signal.length+'쌍)', ms.toFixed(3))}
+      ${row('비율', ratio.toFixed(2)+'×')}
+      ${row('원시 ipTM 중앙값', '야생형 '+mw.toFixed(3)+' / 변이형 '+mm.toFixed(3), 1)}
     </div>
-    <div class="foot">기준 분산 폭 ${spread.toFixed(3)} 이 처리군 간 차이 ${Math.abs(d).toFixed(3)} 를 크게 상회합니다.
+    <div class="foot">구조 축과 같은 음성 대조군 설계입니다 — 같은 서열끼리의 ipTM 쌍 차이가
+      모델 진동(노이즈), 대립형질 간 쌍 차이가 변이 신호입니다.
+      ${det ? '' : `신호가 노이즈를 넘지 못했습니다. 결합 변화가 없다는 뜻이 아니라
+      <b>이 모델이 변이를 감지하지 못한다</b>는 뜻입니다.`}
       Bret et al. (2026) 이 보고한 결합부위 변이 둔감성과 부합합니다.</div>
    </div>`;
 
   drawStrip('#bPlot', [
-    {label:'야생형 + Aβ42',   vals:wt,  color:'#2a78d6'},
-    {label:'R62H + Aβ42', vals:mut, color:'#eb6834'}],
-    'ipTM');
+    {label:'기준 반복', vals:noise,  color:'#2a78d6'},
+    {label:'변이 비교', vals:signal, color:'#eb6834'}],
+    'ipTM 쌍 차이 |Δ|');
 
   loadViewer(['data/structures/trem2_ab42_wt.cif','data/structures/trem2_ab42_r62h.cif'],
              ['#2a4fd8','#e03a3a'], '#bViewer', 'TREM2_overlay.png');
@@ -483,6 +492,21 @@ async function renderBindingAxis(){
 
 const row=(k,v,sub,cls)=>`<div class="row${sub?' sub':''}">
   <span class="k">${k}</span><span class="v mono ${cls||''}">${v}</span></div>`;
+
+/* 검정 방식 표기. 전수 열거면 분할 수, 표본이면 순열 횟수를 함께 적는다. */
+const methodNote = v => v.method === 'exact'
+  ? `순열검정 · 단측 · α = 0.05 · 정확 ${v.nPerm}분할`
+  : `순열검정 · 단측 · α = 0.05 · 표본 ${v.nPerm.toLocaleString()}회`;
+
+/* 전수 열거에서 도달 가능한 최소 p. 판정이 이 값에 붙어 있으면 그렇게 밝힌다. */
+const pFloor = v => v.method === 'exact' ? 1 / v.nPerm : null;
+const floorNote = v => {
+  const f = pFloor(v);
+  return (f !== null && v.p <= f + 1e-12)
+    ? ` 이 값은 표본 크기가 허용하는 <b>최소 p (1/${v.nPerm} = ${f.toFixed(4)})</b> 입니다 —
+       더 작은 p 를 주장하려면 조건당 모델 수를 늘려야 합니다.`
+    : '';
+};
 
 /* ────────────── 분포 도표 (SVG 직접 생성) ────────────── */
 function drawStrip(sel, groups, xlabel){
@@ -589,9 +613,9 @@ async function renderReport(){
     bv[g]=b;
     const al=BIND_ALLELES[g];
     html+=`<tr><td><b>${g}</b> <span class="mono muted">${caseLabel(g)} + ${al.lig}</span></td>
-      <td class="mono">인터페이스</td><td class="n mono">${b.spread.toFixed(3)}</td>
-      <td class="n mono">${Math.abs(b.d).toFixed(3)}</td>
-      <td class="n mono">—</td><td class="n mono">${fmtP(b.p)}</td>
+      <td class="mono">인터페이스</td><td class="n mono">${b.mn.toFixed(3)}</td>
+      <td class="n mono">${b.ms.toFixed(3)}</td>
+      <td class="n mono">${b.ratio.toFixed(2)}×</td><td class="n mono">${fmtP(b.p)}</td>
       <td><span class="badge ${b.det?'sig':'ns'}">${b.det?'변동성 초과':'변동성 내'}</span></td></tr>`;
   }
   $('#rTable').innerHTML=html;
@@ -812,7 +836,7 @@ function renderUserResult(){
     </div>
     <div class="kpis">
       <div class="kpi"><div class="kl">p-value</div><div class="kv mono">${fmtP(u.p)}</div>
-        <div class="kn">Mann–Whitney U · 단측 · α = 0.05</div></div>
+        <div class="kn">${u.method ? methodNote(u) : '순열검정 · 단측 · α = 0.05'}</div></div>
       <div class="kpi"><div class="kl">편차 Δ</div>
         <div class="kv mono">${d>=0?'+':''}${d.toFixed(3)} <span style="font-size:15px">Å</span></div>
         <div class="kn">${det?`Cα–Cα 결합거리의 약 ${Math.round(Math.abs(d)/1.5*100)}%`:'기준 변동 범위 이내'}</div></div>
@@ -833,7 +857,11 @@ function renderUserResult(){
     <tr><td>야생형 그룹</td><td class="mono">${u.wtKey} · 모델 ${u.nWt}개</td></tr>
     <tr><td>변이형 그룹</td><td class="mono">${u.mutKey} · 모델 ${u.nMut}개</td></tr>
     <tr><td>정렬 구간</td><td class="mono">${u.nFit} 잔기 ${u.usedCore?'(pLDDT ≥ 70)':'(전체 — 고신뢰 잔기 부족)'}</td></tr>
-    <tr><td>컷오프</td><td class="mono">8 Å (${u.pos}번 기준)</td></tr>`;
+    <tr><td>컷오프</td><td class="mono">8 Å (${u.pos}번 기준)</td></tr>
+    <tr><td>검정</td><td class="mono">${u.method==='exact'
+        ? `라벨 순열검정 · 정확 ${u.nPerm}분할 · 최소 가능 p ${(1/u.nPerm).toFixed(4)}`
+        : u.method==='sample' ? `라벨 순열검정 · 표본 ${u.nPerm.toLocaleString()}회`
+        : 'Mann–Whitney U (쌍 일부 결측으로 순열 불가)'}</td></tr>`;
 
   drawStrip('#sPlot', [
     {label:'기준 반복', vals:u.baseline, color:'#2a78d6'},

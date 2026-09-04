@@ -140,22 +140,28 @@ function comparePair(A, B, mutPos, cutoff=8.0, plddtMin=70){
 /* ── 그룹 간 검정 ───────────────────────────────────────────
    기준 반복 = 같은 그룹 내 쌍 · 변이 비교 = 그룹 간 쌍 */
 function runDetectability(wtSet, mutSet, mutPos){
-  const pairsIn = set => {
-    const out = [];
-    for(let i=0;i<set.length;i++) for(let j=i+1;j<set.length;j++) out.push([set[i],set[j]]);
-    return out;
-  };
-  const val = pr => { const r = comparePair(pr[0], pr[1], mutPos); return r && r.local; };
-
-  const baseline = [...pairsIn(wtSet), ...pairsIn(mutSet)].map(val).filter(v=>v!=null);
-  const signal = [];
-  wtSet.forEach(a => mutSet.forEach(b => { const v = val([a,b]); if(v!=null) signal.push(v); }));
+  // 전체 쌍 거리 행렬을 한 번에 만든다 (앞쪽 n1 개가 야생형).
+  // 사전 산출 사례와 같은 엔진(app.js 의 splitPairs·permutationP)을 쓴다.
+  const all = [...wtSet, ...mutSet], N = all.length, n1 = wtSet.length;
+  const D = new Float64Array(N*N);
+  let complete = true;
+  for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
+    const r = comparePair(all[i], all[j], mutPos);
+    const v = r && r.local;
+    if(v == null){ complete = false; continue; }
+    D[i*N+j] = D[j*N+i] = v;
+  }
+  const inA = new Uint8Array(N); for(let i=0;i<n1;i++) inA[i]=1;
+  const {noise: baseline, signal} = splitPairs(D, N, inA);
 
   if(baseline.length < 3 || signal.length < 3) return {error:'비교 가능한 쌍이 부족합니다 (각 조건에 구조 3개 이상 필요)'};
 
-  const {p} = mannWhitneyU(signal, baseline, 'greater');
+  // 쌍이 하나라도 비면 순열을 돌릴 수 없으므로 근사값으로 후퇴한다
+  const {p:pMW} = mannWhitneyU(signal, baseline, 'greater');
+  const perm = complete ? permutationP(D, N, n1) : {p:pMW, method:'mw', nPerm:0};
   const meta = comparePair(wtSet[0], mutSet[0], mutPos);
-  return {baseline, signal, p, detected: p < 0.05,
+  return {baseline, signal, p: perm.p, pMW, detected: perm.p < 0.05,
+          method: perm.method, nPerm: perm.nPerm,
           nFit: meta?.nFit, usedCore: meta?.usedCore};
 }
 
