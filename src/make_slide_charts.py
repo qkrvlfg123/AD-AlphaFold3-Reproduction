@@ -19,9 +19,11 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt                     # noqa: E402
+import matplotlib.font_manager as fm                # noqa: E402
 from matplotlib.patches import Rectangle            # noqa: E402
 import numpy as np                                  # noqa: E402
-from scipy.stats import mannwhitneyu                # noqa: E402
+from detectability import (matrix_from_rmsd_rows,   # noqa: E402
+                           verdict_from_matrix, verdict_from_scalars)
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -40,8 +42,16 @@ C_NOISE = "#2a78d6"        # 슬롯 1 파랑
 C_SIGNAL = "#eb6834"       # 슬롯 2 주황
 C_NAVY = "#1e3a5f"         # 발표 타이틀색
 
+# 한글 폰트 — 실행 환경에 있는 것을 고른다.
+# macOS(AppleGothic) 하드코딩이었으나 Windows/Linux 에서 한글이 깨져 후보 목록으로 바꿨다.
+_KO_FONTS = ["AppleGothic", "Malgun Gothic", "NanumGothic", "Noto Sans KR", "Gulim"]
+_available = {f.name for f in fm.fontManager.ttflist}
+_font = next((f for f in _KO_FONTS if f in _available), "DejaVu Sans")
+if _font == "DejaVu Sans":
+    print("  ⚠️ 한글 폰트를 찾지 못했다 — 라벨이 깨질 수 있다")
+
 plt.rcParams.update({
-    "font.family": "AppleGothic",
+    "font.family": _font,
     "axes.unicode_minus": False,
     "figure.facecolor": SURFACE,
     "axes.facecolor": SURFACE,
@@ -128,12 +138,10 @@ def slide13() -> Path:
 
     data = {}
     for g in genes:
-        noise = [float(r["rmsd_local8A"]) for r in rows
-                 if r["gene"] == g and r["comparison"].startswith("noise")]
-        sig = [float(r["rmsd_local8A"]) for r in rows
-               if r["gene"] == g and r["comparison"] == "signal_WT_vs_MUT"]
-        _, p = mannwhitneyu(sig, noise, alternative="greater")
-        data[g] = (noise, sig, p)
+        rows_g = [r for r in rows if r["gene"] == g]
+        D, k = matrix_from_rmsd_rows(rows_g)
+        v = verdict_from_matrix(D, k, k)
+        data[g] = (v["noise"], v["signal"], v["p"])
 
     xmax = max(max(v[0] + v[1]) for v in data.values()) * 1.18
 
@@ -177,7 +185,7 @@ def slide13() -> Path:
         vcolor = C_SIGNAL if sep else "#b02020"
         ax.text(1.02, 0.72, verdict, transform=ax.transAxes, fontsize=10,
                 color=vcolor, fontweight="bold", va="center")
-        ax.text(1.02, 0.30, f"p = {p:.2g}", transform=ax.transAxes, fontsize=9,
+        ax.text(1.02, 0.30, f"순열 p = {p:.4f}", transform=ax.transAxes, fontsize=9,
                 color=INK_2, va="center")
 
     axes[-1].set_xlabel("변이 잔기 8 Å 이내 Cα 국소 RMSD (Å)",
@@ -188,7 +196,7 @@ def slide13() -> Path:
              fontsize=13.5, color=C_NAVY, fontweight="bold", ha="left")
     fig.text(0.15, 0.905,
              "노이즈 = 같은 서열의 모델 쌍 20개 · 신호 = WT × 변이형 모델 쌍 25개 · "
-             "세로선 = 중앙값 · Mann–Whitney U 단측",
+             "세로선 = 중앙값 · 라벨 순열검정 단측 (전수 126분할)",
              fontsize=9, color=INK_2, ha="left")
     fig.text(0.15, 0.032,
              "CD33은 논문이 본문 Figure 4B에 대표로 실은 사례다. "
@@ -209,14 +217,16 @@ def slide14() -> Path:
     rows = list(_csv.DictReader((RESULTS / "boltz_iptm.csv").open()))
     wt  = [float(r["iptm"]) for r in rows if r["allele"] == "WT"]
     mut = [float(r["iptm"]) for r in rows if r["allele"] == "R62H"]
-    _, p = mannwhitneyu(mut, wt, alternative="two-sided")
+    # 구조 축과 같은 음성 대조군 설계: 같은 대립형질 안의 쌍 = 노이즈, 대립형질 간 쌍 = 신호
+    v = verdict_from_scalars(wt, mut)
+    noise, signal, p = v["noise"], v["signal"], v["p"]
 
     fig, ax = plt.subplots(figsize=(10, 4.6), dpi=200)
     fig.subplots_adjust(left=0.17, right=0.80, top=0.68, bottom=0.22)
     rng = np.random.default_rng(0)
 
-    for vals, y, color, lab in ((wt, 1.0, C_NOISE, "WT"),
-                                (mut, 0.0, C_SIGNAL, "R62H")):
+    for vals, y, color, lab in ((noise, 1.0, C_NOISE, "노이즈"),
+                                (signal, 0.0, C_SIGNAL, "신호")):
         jit = rng.uniform(-0.17, 0.17, len(vals))
         ax.scatter(vals, np.full(len(vals), y) + jit, s=42, color=color,
                    alpha=0.6, linewidths=1.2, edgecolors=SURFACE, zorder=3)
@@ -227,7 +237,8 @@ def slide14() -> Path:
 
     ax.set_ylim(-0.62, 1.66)
     ax.set_yticks([1.0, 0.0])
-    ax.set_yticklabels(["TREM2 WT\n+ Aβ42", "TREM2 R62H\n+ Aβ42"],
+    ax.set_yticklabels([f"기준 반복\n(같은 대립형질 쌍, {len(noise)})",
+                        f"변이 비교\n(대립형질 간 쌍, {len(signal)})"],
                        fontsize=10, color=INK_2)
     ax.tick_params(axis="y", length=0)
     ax.tick_params(axis="x", colors=INK_2, labelsize=9)
@@ -236,22 +247,25 @@ def slide14() -> Path:
     for sp in ("top", "right", "left"):
         ax.spines[sp].set_visible(False)
     ax.spines["bottom"].set_color(GRID)
-    ax.set_xlabel("ipTM — 두 사슬 인터페이스 신뢰도 (0~1, 높을수록 결합 확신)",
+    ax.set_xlabel("ipTM 쌍 차이 |Δ| — 작을수록 두 구조의 인터페이스 신뢰도가 비슷하다",
                   fontsize=10, color=INK_2, labelpad=8)
 
     ax.text(1.03, 0.70, "구분 안 됨", transform=ax.transAxes, fontsize=11,
             color="#b02020", fontweight="bold", va="center")
-    ax.text(1.03, 0.32, f"p = {p:.2f}", transform=ax.transAxes, fontsize=9.5,
+    ax.text(1.03, 0.32, f"순열 p = {p:.2f}", transform=ax.transAxes, fontsize=9.5,
+            color=INK_2, va="center")
+    ax.text(1.03, 0.10, f"비 {v['ratio']:.2f}×", transform=ax.transAxes, fontsize=9.5,
             color=INK_2, va="center")
 
     fig.text(0.17, 0.93, "Boltz-2도 이 변이를 감별하지 못했다",
              fontsize=13.5, color=C_NAVY, fontweight="bold", ha="left")
     fig.text(0.17, 0.855,
-             f"시드 3 × 모델 5 = 각 {len(wt)}개 · 세로선 = 중앙값 · Mann–Whitney U 양측",
+             f"시드 3 × 모델 5 = 조건당 {len(wt)}개 구조 · 세로선 = 중앙값 · "
+             f"라벨 순열검정 단측 ({v['method']}, {v['n_perm']:,})",
              fontsize=9, color=INK_2, ha="left")
     fig.text(0.17, 0.055,
-             "복합체 예측 자체는 성공했다 (ipTM 0.85는 높은 값). 변이 감별력만 없다.  "
-             "Bret et al. 2026의 결합부위 변이 둔감성 보고와 일치.",
+             "복합체 예측 자체는 성공했다 (원시 ipTM 중앙값 0.85). 변이 감별력만 없다.  "
+             "비 1.0 미만 = 변이 쌍 차이가 같은 서열 쌍 차이보다도 작다.",
              fontsize=8.5, color=INK_MUTED, ha="left")
 
     out = FIG_DIR / "slide14_boltz_iptm.png"

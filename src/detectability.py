@@ -66,6 +66,32 @@ def matrix_from_scalars(values: list[float]) -> list[list[float]]:
     return [[abs(values[i] - values[j]) for j in range(n)] for i in range(n)]
 
 
+def matrix_from_rmsd_rows(rows, value_key: str = "rmsd_local8A"):
+    """rmsd_pairs.csv 의 쌍 목록 -> 거리 행렬.
+
+    0..k-1 = 야생형 모델, k..2k-1 = 변이형 모델.
+    반환: (행렬, k). 쌍이 하나라도 비면 AssertionError 를 낸다.
+    app/app.js 의 computeStructureVerdict 와 같은 인덱싱이다.
+    """
+    k = max(int(r["model_b"]) for r in rows) + 1
+    N = 2 * k
+    D = [[0.0] * N for _ in range(N)]
+    filled = 0
+    for r in rows:
+        i, j, v = int(r["model_a"]), int(r["model_b"]), float(r[value_key])
+        if r["comparison"] == "noise_WT":
+            a, b = i, j
+        elif r["comparison"] == "noise_MUT":
+            a, b = k + i, k + j
+        else:
+            a, b = i, k + j
+        if D[a][b] == 0.0:
+            filled += 1
+        D[a][b] = D[b][a] = v
+    assert filled == N * (N - 1) // 2, f"쌍 행렬이 불완전하다 ({filled}/{N*(N-1)//2})"
+    return D, k
+
+
 def split_pairs(D, N: int, in_a) -> tuple[list[float], list[float]]:
     """라벨에 따라 쌍을 노이즈(같은 조건)/신호(조건 간)로 가른다."""
     noise, signal = [], []

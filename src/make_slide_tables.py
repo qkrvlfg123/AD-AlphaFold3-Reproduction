@@ -19,7 +19,7 @@ import statistics as st
 import sys
 from pathlib import Path
 
-from scipy.stats import mannwhitneyu
+from detectability import matrix_from_rmsd_rows, verdict_from_matrix
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -94,27 +94,31 @@ def main() -> int:
 
     # ---------------- 표 3 : 노이즈 바닥 vs 신호 ---------------------------
     A("\n## 표 3 · 노이즈 바닥 대비 변이 효과 *(논문에 없는 자체 검증)*\n")
-    A("| 단백질 | 노이즈 (같은 서열, 20쌍) | 신호 (WT vs 변이형, 25쌍) | Mann–Whitney p | 판정 |")
-    A("|---|---|---|---|---|")
+    A("| 단백질 | 노이즈 (같은 서열, 20쌍) | 신호 (WT vs 변이형, 25쌍) | 비 | 순열 p | 판정 |")
+    A("|---|---|---|---|---|---|")
 
     verdicts = {}
     for g in GENES:
-        noise = [float(r["rmsd_local8A"]) for r in pairs
-                 if r["gene"] == g and r["comparison"].startswith("noise")]
-        sig = [float(r["rmsd_local8A"]) for r in pairs
-               if r["gene"] == g and r["comparison"] == "signal_WT_vs_MUT"]
-        u, p = mannwhitneyu(sig, noise, alternative="greater")
-        sep = p < 0.05 and st.median(sig) > st.median(noise)
-        verdicts[g] = (st.median(noise), st.median(sig), p, sep)
-        A(f"| {g} | {st.median(noise):.3f} Å (중앙값) | {st.median(sig):.3f} Å (중앙값) "
-          f"| {p:.2g} | {'신호 > 노이즈' if sep else '**구분 안 됨**'} |")
+        rows_g = [r for r in pairs if r["gene"] == g]
+        D, k = matrix_from_rmsd_rows(rows_g)
+        v = verdict_from_matrix(D, k, k)
+        sep = v["det"] and v["ms"] > v["mn"]
+        verdicts[g] = (v["mn"], v["ms"], v["p"], sep, v)
+        A(f"| {g} | {v['mn']:.3f} Å (중앙값) | {v['ms']:.3f} Å (중앙값) "
+          f"| {v['ratio']:.2f}× | {v['p']:.4f} | "
+          f"{'신호 > 노이즈' if sep else '**구분 안 됨**'} |")
 
     A("\n**측정 방법**")
     A("- 대상: 변이 잔기 8 Å 이내 Cα (국소 RMSD). Ig 도메인 Cα로 먼저 정렬한 뒤 "
       "재정렬 없이 측정")
     A("- 노이즈 = 같은 서열의 서로 다른 모델 쌍 (WT-WT 10쌍 + 변이형-변이형 10쌍)")
     A("- 신호 = WT 모델 5개 × 변이형 모델 5개 = 25쌍")
-    A("- 검정: Mann–Whitney U, 단측(신호 > 노이즈), 유의수준 0.05")
+    A("- 검정: **라벨 순열검정**, 단측(신호 > 노이즈), 유의수준 0.05")
+    A("  - 쌍은 서로 독립이 아니다(같은 구조가 여러 쌍에 재사용된다). Mann–Whitney 의 p 는 "
+      "과소평가되므로 라벨을 뒤섞은 경험 분포로 교정한다")
+    A(f"  - 조건당 모델 5개 -> 전수 분할 {next(iter(verdicts.values()))[4]['n_perm']}개. "
+      f"**도달 가능한 최소 p 는 1/{next(iter(verdicts.values()))[4]['n_perm']} = "
+      f"{1/next(iter(verdicts.values()))[4]['n_perm']:.4f}** 다")
     A("- k = 모델 5개 (AF Server가 job당 자동 생성하는 diffusion sample). "
       "추가 예측 없이 기존 결과만 사용")
 
@@ -126,7 +130,7 @@ def main() -> int:
           f"모델 자체의 변동과 통계적으로 구분되지 않는다.")
 
     path = RESULTS / "slide_tables.md"
-    path.write_text("\n".join(out) + "\n")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
     print("\n".join(out))
     print(f"\n\n저장 → {path.relative_to(ROOT)}")
     return 0
