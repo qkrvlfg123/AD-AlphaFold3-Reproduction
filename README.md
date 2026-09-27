@@ -16,6 +16,13 @@ randomization method integrated with AlphaFold3 for 3D structure prediction.*
 | **C. 구현** | Python 스크립트 12개 · 재현 절차 · 예측 구조 60개 | [재현 방법](#c--재현-방법-implementation) · [`src/`](src) · [`data/`](data) |
 | **C. 구현** | **웹 애플리케이션** — UniProt 실시간 검증 · 브라우저 통계 재계산 | [데모](https://mimm-112.github.io/AD-AlphaFold3-Reproduction/app/) · [`app/`](app) |
 
+### 팀 구성 · 역할 (2인 팀)
+
+| 구성원 | 맡은 파트 | 주요 위치 |
+|---|---|---|
+| **qkrvlfg123 (본인)** | **Boltz-2 교차검증** — 기존 AF3 결과에 관점이 다른 결합 예측 모델(Boltz-2)을 추가해 결과의 신뢰성을 보강 (TREM2+Aβ42, PILRA+NPDC1 결합 축 → 2×2 교차검증 매트릭스) | [`notebooks/02_boltz_trem2_ab42.ipynb`](notebooks/02_boltz_trem2_ab42.ipynb) · [`src/make_boltz_inputs.py`](src/make_boltz_inputs.py) · [`src/make_boltz_npdc1_inputs.py`](src/make_boltz_npdc1_inputs.py) · [`src/analyze_boltz.py`](src/analyze_boltz.py) · [`data/boltz2/`](data/boltz2) · [결합 축 결과](#3-결합-축--boltz-2도-감별-실패) |
+| [mimm-112](https://github.com/mimm-112) | 초기 AF3 재현 · 돌연변이 구조 변화 진위 판정(permutation test) · BlindSpot 웹앱 · 발표 슬라이드 | [`src/`](src) · [`app/`](app) · [`app/slides/`](app/slides) |
+
 ---
 
 ## 한 줄 요약
