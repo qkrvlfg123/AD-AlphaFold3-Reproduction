@@ -20,8 +20,8 @@ randomization method integrated with AlphaFold3 for 3D structure prediction.*
 
 | 구성원 | 맡은 파트 | 주요 위치 |
 |---|---|---|
-| **qkrvlfg123 (본인)** | **Boltz-2 교차검증** — 기존 AF3 결과에 관점이 다른 결합 예측 모델(Boltz-2)을 추가해 결과의 신뢰성을 보강 (TREM2+Aβ42, PILRA+NPDC1 결합 축 → 2×2 교차검증 매트릭스) | [`notebooks/02_boltz_trem2_ab42.ipynb`](notebooks/02_boltz_trem2_ab42.ipynb) · [`src/make_boltz_inputs.py`](src/make_boltz_inputs.py) · [`src/make_boltz_npdc1_inputs.py`](src/make_boltz_npdc1_inputs.py) · [`src/analyze_boltz.py`](src/analyze_boltz.py) · [`data/boltz2/`](data/boltz2) · [결합 축 결과](#3-결합-축--boltz-2도-감별-실패) |
-| [mimm-112](https://github.com/mimm-112) | 초기 AF3 재현 · 돌연변이 구조 변화 진위 판정(permutation test) · BlindSpot 웹앱 · 발표 슬라이드 | [`src/`](src) · [`app/`](app) · [`app/slides/`](app/slides) |
+| **qkrvlfg123 (본인)** | **Boltz-2를 두 번째 복합체(PILRA-NPDC1)로 확장** · **구조 축 × 결합 축 2×2 교차검증 매트릭스 구축** · **유의성 검정을 음성 대조군 기반 순열검정으로 재설계** (Python·JS 동일 알고리즘으로 통일) | [`src/make_boltz_npdc1_inputs.py`](src/make_boltz_npdc1_inputs.py) · [`src/detectability.py`](src/detectability.py) · [`src/analyze_boltz.py`](src/analyze_boltz.py) (PILRA 축·순열검정 부분) · [`inputs/boltz/README_NPDC1.md`](inputs/boltz/README_NPDC1.md) · [`app/app.js`](app/app.js) (2×2 매트릭스·순열검정 부분) · [`PROGRESS.md`](PROGRESS.md) · [교차검증 결과](#4-교차검증--22-종합-판정) · [고찰](#고찰--22-매트릭스를-어떻게-읽을-것인가) |
+| [mimm-112](https://github.com/mimm-112) | AF3 재현 · Mann–Whitney 검정 · TREM2+Aβ42 Boltz-2 · BlindSpot 웹앱 · 슬라이드 | [`src/`](src) (AF3 파이프라인) · [`src/make_boltz_inputs.py`](src/make_boltz_inputs.py) · [`notebooks/02_boltz_trem2_ab42.ipynb`](notebooks/02_boltz_trem2_ab42.ipynb) · [`app/`](app) · [`app/slides/`](app/slides) |
 
 ---
 
