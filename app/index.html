@@ -239,11 +239,11 @@ footer{border-top:1px solid var(--line);padding:20px 28px;font-size:11.5px;color
   <div class="seclabel">수록 사례</div>
   <div class="cases">
     <button class="case" data-preset="PILRA"><div class="nm">PILRA R78G</div>
-      <div class="sc mono">구조 · p 6×10⁻⁹</div><span class="badge sig">재현 변동성 초과</span></button>
+      <div class="sc mono">구조 · p 0.0079</div><span class="badge sig">재현 변동성 초과</span></button>
     <button class="case" data-preset="TREM2"><div class="nm">TREM2 R62H</div>
-      <div class="sc mono">구조 · p 5.4×10⁻³</div><span class="badge sig">재현 변동성 초과</span></button>
+      <div class="sc mono">구조 · p 0.0079</div><span class="badge sig">재현 변동성 초과</span></button>
     <button class="case" data-preset="CD33"><div class="nm">CD33 R69G</div>
-      <div class="sc mono">구조 · p 0.54</div><span class="badge ns">재현 변동성 내</span></button>
+      <div class="sc mono">구조 · p 0.65</div><span class="badge ns">재현 변동성 내</span></button>
     <button class="case" data-goto="s4"><div class="nm">TREM2 + Aβ42</div>
       <div class="sc mono">인터페이스 · p 0.30</div><span class="badge ns">재현 변동성 내</span></button>
   </div>
@@ -454,7 +454,7 @@ footer{border-top:1px solid var(--line);padding:20px 28px;font-size:11.5px;color
       <tr><th style="width:22%">항목</th><th>내용</th></tr>
       <tr><td>귀무가설 H₀</td><td>야생형–변이형 간 구조적 편차 = 동일 조건 반복 예측의 변동</td></tr>
       <tr><td>대립가설 H₁</td><td>변이형의 구조적 편차가 재현 변동성을 초과한다</td></tr>
-      <tr><td><b>음성 대조군</b></td><td><b>동일 서열의 모델 쌍</b> — 변이가 없으므로 관측 편차는 전부 모델 변동이다</td></tr>
+      <tr><td><b>음성 대조군</b></td><td><b>동일 서열의 모델 쌍</b> — 변이가 없으므로 관측 편차는 전부 모델 변동이다<br><span class="muted">구조 축은 서열당 시드 1개의 한 작업에서 나온 모델 5개를 쓴다. 작업 간·시드 간 변동은 포함되지 않는다.</span></td></tr>
       <tr><td>처리군</td><td>야생형 × 변이형 구조 쌍</td></tr>
       <tr><td>검정</td><td><b>라벨 순열검정</b> · 두 축 모두 단측 · α = 0.05<br>
         <span class="muted">쌍은 서로 독립이 아니므로(같은 구조가 여러 쌍에 재사용됨) Mann–Whitney 의 p 는
@@ -470,9 +470,9 @@ footer{border-top:1px solid var(--line);padding:20px 28px;font-size:11.5px;color
     <div class="body" style="padding:0">
       <table><tr><th>사례</th><th>모델 보고 신뢰도</th><th>변이 감별</th></tr>
         <tr><td><b>CD33 R69G</b></td><td class="mono">도메인 pLDDT 97.3 · pTM 0.60</td>
-          <td><span class="badge ns">변동성 내 p=0.54</span></td></tr>
+          <td><span class="badge ns">변동성 내 p=0.65</span></td></tr>
         <tr><td><b>TREM2 R62H + Aβ42</b></td><td class="mono">ipTM 0.851 · complex pLDDT 0.856</td>
-          <td><span class="badge ns">변동성 내 p=0.30</span></td></tr></table>
+          <td><span class="badge ns">변동성 내 p=0.80</span></td></tr></table>
       <p style="font-size:12.5px;color:var(--ink2);padding:13px 14px">
         고신뢰 조건에서도 변이 효과가 검출되지 않습니다. pLDDT 97 은 해당 위치 구조에 대한 확신을 의미할 뿐
         변이 반영을 의미하지 않으며, 현행 도구 중 변이 감별력을 별도로 보고하는 것은 없습니다.</p></div></div>

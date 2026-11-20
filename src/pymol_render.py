@@ -32,7 +32,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 from sequences import TARGETS  # noqa: E402
 
-FOLDS = sorted(ROOT.glob("folds_*"), reverse=True)
+# AF Server 원본 폴더(folds_*)는 저장소에 넣지 않는다. 없으면 저장소의 정리본(data/alphafold3)을 읽는다.
+FOLDS = sorted(ROOT.glob("folds_*"), reverse=True) or [ROOT / "data" / "alphafold3"]
 FIG_DIR = ROOT / "figures"
 RESULTS_DIR = ROOT / "results"
 

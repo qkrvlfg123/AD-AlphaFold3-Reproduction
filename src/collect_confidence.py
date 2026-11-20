@@ -80,7 +80,10 @@ def parse_cif_ca_plddt(cif_path: Path) -> dict[int, float]:
 
 def find_latest_folds_dir() -> Path | None:
     dirs = sorted(ROOT.glob("folds_*"), reverse=True)
-    return dirs[0] if dirs else None
+    if dirs:
+        return dirs[0]
+    fallback = ROOT / "data" / "alphafold3"       # 저장소에 포함된 정리본
+    return fallback if fallback.exists() else None
 
 
 def parse_job_name(job: str) -> tuple[str, str, str]:

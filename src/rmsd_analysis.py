@@ -33,7 +33,8 @@ from sequences import TARGETS  # noqa: E402
 
 from pymol import cmd  # noqa: E402
 
-FOLDS = sorted(ROOT.glob("folds_*"), reverse=True)
+# AF Server 원본 폴더(folds_*)는 저장소에 넣지 않는다. 없으면 저장소의 정리본(data/alphafold3)을 읽는다.
+FOLDS = sorted(ROOT.glob("folds_*"), reverse=True) or [ROOT / "data" / "alphafold3"]
 N_MODELS = 5
 LOCAL_CUTOFF = 8.0
 
