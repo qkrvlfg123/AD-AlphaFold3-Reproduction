@@ -6,7 +6,7 @@
 야생형–변이형 간 구조 및 결합 인터페이스 편차가 이를 초과하는지 비모수 검정으로 판정하여,
 해당 예측을 근거로 사용할 수 있는지 사전에 선별하는 시스템
 
-**▶ https://mimm-112.github.io/AD-AlphaFold3-Reproduction/app/**
+**▶ https://qkrvlfg123.github.io/AD-AlphaFold3-Reproduction/app/**
 
 ---
 

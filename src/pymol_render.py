@@ -15,7 +15,7 @@ Yao et al., Cell Genomics 4:100700 (2024) 의 그림 설명을 그대로 따른�
 model_0 을 쓴다 (ranking_score 최상위).
 
 실행:
-  /opt/anaconda3/envs/pymol/bin/python src/pymol_render.py
+  conda run -n pymol python src/pymol_render.py
 출력:
   figures/<GENE>_overlay.png        전체 오버레이 (논문 Fig 4B 구도)
   figures/<GENE>_zoom.png           변이 부위 확대

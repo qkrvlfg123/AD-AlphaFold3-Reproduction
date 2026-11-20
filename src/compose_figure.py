@@ -9,7 +9,7 @@ pymol_render.py가 만든 두 이미지(전체 오버레이 + 변이부위 확�
   TREM2 : SNP rs143332484-C>T (chr6:41161469)   Arginine [CGT] > Histidine [CAT]
 
 ⚠️ pymol 환경에는 matplotlib이 없으므로 이 스크립트는 base 환경에서 돌린다.
-   렌더:  /opt/anaconda3/envs/pymol/bin/python src/pymol_render.py
+   렌더:  conda run -n pymol python src/pymol_render.py
    합성:  python3 src/compose_figure.py
 """
 

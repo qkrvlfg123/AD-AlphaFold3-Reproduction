@@ -1,10 +1,19 @@
-# [알츠하이머 인과 단백질 해독 — 새로운 멘델 무작위화 방법과 AlphaFold3를 통한 3D 구조 예측] 논문 기반 서비스 플랫폼 개발
+# AlphaFold3 논문 재현과 변이 감별력 검정 — BlindSpot
+
+알츠하이머 인과 단백질의 AlphaFold3 구조 예측(Yao et al. 2024)을 재현하고,
+예측 모델이 미스센스 변이를 실제로 감별하는지 음성 대조군과 순열검정으로 검정한 프로젝트.
+
+> 논문은 알츠하이머 인과 단백질의 미스센스 변이가 **3D 구조를 바꾼다**고 보고했다.
+> 동일 조건으로 재현한 결과 **그 구조 변화는 모델 자체의 변동과 구분되지 않았고**,
+> 결합 예측 모델(Boltz-2)로 확장해도 **두 복합체 모두에서 변이를 감별하지 못했다.**
+> → 구조 예측으로 변이 효과를 논하기 전에 **모델의 변이 감별력을 먼저 검정해야 한다.**
 
 **원논문** Yao, M. *et al.* (2024) *Deciphering proteins in Alzheimer's disease: A new Mendelian
 randomization method integrated with AlphaFold3 for 3D structure prediction.*
 **Cell Genomics 4, 100700.** [`10.1016/j.xgen.2024.100700`](https://doi.org/10.1016/j.xgen.2024.100700)
 
-**▶ 데모** https://mimm-112.github.io/AD-AlphaFold3-Reproduction/app/ — 본 검정을 웹에서 실행
+**▶ 데모** https://qkrvlfg123.github.io/AD-AlphaFold3-Reproduction/app/ — 본 검정을 웹에서 실행
+(이 저장소의 `main`에서 배포. 2×2 교차검증 매트릭스와 순열검정이 반영된 버전)
 
 
 ### 이 저장소에서 확인할 수 있는 것
@@ -14,23 +23,14 @@ randomization method integrated with AlphaFold3 for 3D structure prediction.*
 | **A. 논문 조사** | 선행 연구 한계·차별성 정리, 인용 문헌 10편 | [선행 연구의 한계](#a--선행-연구의-한계와-본-연구의-차별성-literature-review) · [재현 범위](#a--재현-범위--무엇을-실행했고-무엇을-인용했는가) |
 | **B. 연구** | 가설 설정 · 음성 대조군 · 통계 검정 | [가설과 검정](#b--가설과-검정-research--analysis) · [결과](#결과) |
 | **C. 구현** | Python 스크립트 12개 · 재현 절차 · 예측 구조 60개 | [재현 방법](#c--재현-방법-implementation) · [`src/`](src) · [`data/`](data) |
-| **C. 구현** | **웹 애플리케이션** — UniProt 실시간 검증 · 브라우저 통계 재계산 | [데모](https://mimm-112.github.io/AD-AlphaFold3-Reproduction/app/) · [`app/`](app) |
+| **C. 구현** | **웹 애플리케이션** — UniProt 실시간 검증 · 브라우저 통계 재계산 | [데모](https://qkrvlfg123.github.io/AD-AlphaFold3-Reproduction/app/) · [`app/`](app) |
 
 ### 팀 구성 · 역할 (2인 팀)
 
 | 구성원 | 맡은 파트 | 주요 위치 |
 |---|---|---|
-| **qkrvlfg123 (본인)** | **Boltz-2를 두 번째 복합체(PILRA-NPDC1)로 확장** · **구조 축 × 결합 축 2×2 교차검증 매트릭스 구축** · **유의성 검정을 음성 대조군 기반 순열검정으로 재설계** (Python·JS 동일 알고리즘으로 통일) | [`src/make_boltz_npdc1_inputs.py`](src/make_boltz_npdc1_inputs.py) · [`src/detectability.py`](src/detectability.py) · [`src/analyze_boltz.py`](src/analyze_boltz.py) (PILRA 축·순열검정 부분) · [`inputs/boltz/README_NPDC1.md`](inputs/boltz/README_NPDC1.md) · [`app/app.js`](app/app.js) (2×2 매트릭스·순열검정 부분) · [`PROGRESS.md`](PROGRESS.md) · [교차검증 결과](#4-교차검증--22-종합-판정) · [고찰](#고찰--22-매트릭스를-어떻게-읽을-것인가) |
+| **qkrvlfg123 (본인)** | **Boltz-2를 두 번째 복합체(PILRA-NPDC1)로 확장** · **구조 축 × 결합 축 2×2 교차검증 매트릭스 구축** · **유의성 검정을 음성 대조군 기반 순열검정으로 재설계** (Python·JS 동일 알고리즘으로 통일) | [`src/make_boltz_npdc1_inputs.py`](src/make_boltz_npdc1_inputs.py) · [`src/detectability.py`](src/detectability.py) · [`src/analyze_boltz.py`](src/analyze_boltz.py) (PILRA 축·순열검정 부분) · [`inputs/boltz/README_NPDC1.md`](inputs/boltz/README_NPDC1.md) · [`app/app.js`](app/app.js) (2×2 매트릭스·순열검정 부분) · [`docs/PROGRESS.md`](docs/PROGRESS.md) · [`tests/`](tests) · [교차검증 결과](#4-교차검증--22-종합-판정) · [고찰](#고찰--22-매트릭스를-어떻게-읽을-것인가) |
 | [mimm-112](https://github.com/mimm-112) | AF3 재현 · Mann–Whitney 검정 · TREM2+Aβ42 Boltz-2 · BlindSpot 웹앱 · 슬라이드 | [`src/`](src) (AF3 파이프라인) · [`src/make_boltz_inputs.py`](src/make_boltz_inputs.py) · [`notebooks/02_boltz_trem2_ab42.ipynb`](notebooks/02_boltz_trem2_ab42.ipynb) · [`app/`](app) · [`app/slides/`](app/slides) |
-
----
-
-## 한 줄 요약
-
-> 논문은 알츠하이머 인과 단백질의 미스센스 변이가 **3D 구조를 바꾼다**고 보고했다.
-> 동일 조건으로 재현한 결과 **그 구조 변화는 모델 자체의 변동과 구분되지 않았고**,
-> 결합 예측 모델(Boltz-2)로 확장해도 **두 복합체 모두에서 변이를 감별하지 못했다.**
-> → 구조 예측으로 변이 효과를 논하기 전에 **모델의 변이 감별력을 먼저 검정해야 한다.**
 
 ---
 
@@ -276,7 +276,7 @@ MR-SPI 자체는 **오픈소스로 공개되어 있어 코드 접근에는 제�
 **AlphaFold3 · Boltz-2 기반 미스센스 변이 구조 예측 감별력 검정 플랫폼**
 
 본 검정 절차를 브라우저에서 실행하는 정적 애플리케이션.
-**https://mimm-112.github.io/AD-AlphaFold3-Reproduction/app/**
+**https://qkrvlfg123.github.io/AD-AlphaFold3-Reproduction/app/**
 
 | 기능 | 상태 |
 |---|---|
@@ -300,7 +300,7 @@ MR-SPI 자체는 **오픈소스로 공개되어 있어 코드 접근에는 제�
 ### 환경
 
 ```bash
-python3 -m pip install numpy scipy matplotlib pandas requests
+python3 -m pip install -r requirements.txt
 conda create -n pymol -c conda-forge python=3.11 pymol-open-source -y   # RMSD·렌더링용
 ```
 
@@ -319,10 +319,10 @@ python3 src/make_af_jobs.py
 python3 src/collect_confidence.py
 
 # 4. RMSD 쌍 계산 (PyMOL 환경)
-/opt/anaconda3/envs/pymol/bin/python src/rmsd_analysis.py
+conda run -n pymol python src/rmsd_analysis.py
 
 # 5. 논문 스타일 그림 + 슬라이드 표/차트
-/opt/anaconda3/envs/pymol/bin/python src/pymol_render.py
+conda run -n pymol python src/pymol_render.py
 python3 src/compose_figure.py
 python3 src/make_slide_tables.py
 python3 src/make_slide_charts.py
@@ -335,6 +335,15 @@ python3 src/analyze_boltz.py
 # 7. 웹 애플리케이션 로컬 실행
 cd app && python3 -m http.server 8899   # → http://localhost:8899
 ```
+
+### 검정 엔진 테스트
+
+```bash
+python3 tests/test_detectability.py     # 표준 라이브러리만 사용, 9개 테스트
+```
+
+`results/`의 원자료에서 위 결과 표의 값(노이즈·신호 중앙값, 비, 순열 p, 판정)이 그대로 재현되는지 확인하고,
+양성·음성 대조, 라벨 교환 불변성, 전수 열거와 표본 순열의 일치를 함께 검사한다.
 
 ### 재현성 장치
 
@@ -362,6 +371,9 @@ src/
   make_boltz_npdc1_inputs.py  Boltz-2 입력 YAML 생성 (PILRA ± NPDC1)
   analyze_boltz.py        ipTM 집계 + 검정 (타 사례 행은 보존)
 
+tests/
+  test_detectability.py   검정 엔진 회귀 테스트 (README 결과 표 재현 확인)
+
 notebooks/
   02_boltz_trem2_ab42.ipynb   Colab T4용 Boltz-2 실행 노트북
 
@@ -374,6 +386,7 @@ inputs/     FASTA · AF Server JSON · Boltz YAML
 data/       예측 구조 60개 + 신뢰도 JSON (MSA·PAE는 재생성 가능하므로 제외)
 results/    집계 CSV · 통계 요약 · 슬라이드 표
 figures/    논문 재현 그림 · 분석 차트
+docs/       작업 기록 (교차검증 매트릭스 설계 과정)
 ```
 
 ---
@@ -417,7 +430,8 @@ figures/    논문 재현 그림 · 분석 차트
 - MR-SPI 통계 파트는 재현하지 않고 논문 값을 인용했다 (UKB-PPP는 통제접근 자원)
 
 ## 향후 개선 과제
-- 기획의 완성도를 높이기 위해 연구자가 수기로 하나씩 변이를 입력하는 대신 "VCF 파일을 통째로 업로드하면 시스템이 주요 돌연변이를 추출해 자동으로 입력칸을 세팅해 주는 편의 기능"
+- **VCF 일괄 입력.** 지금은 연구자가 변이를 하나씩 직접 입력한다. VCF 파일을 업로드하면
+  주요 미스센스 변이를 추출해 입력란을 자동으로 채우는 기능을 추가한다.
 - **결합 축 검증 사례 확대.** 이번에 결합 축 검증에 쓸 수 있었던 것은 변이가 결합에 미치는
   영향을 실험으로 보고한 문헌이 있는 단백질(TREM2 · PILRA) 뿐이었다. 감별력을 재려면
   "모델이 무엇을 놓쳤는지" 대조할 실험값이 있어야 하는데, 그런 **결합 실험 데이터 자체가

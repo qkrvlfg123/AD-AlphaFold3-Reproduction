@@ -16,7 +16,7 @@ AF Server는 job당 모델 5개를 준다. 이걸 이용해 두 가지를 잰다
   · 그래서 Ig 도메인 CA로 정렬한 뒤, 그 상태에서 RMSD를 잰다.
   · local RMSD는 정렬을 다시 하지 않는다. 다시 맞추면 국소 차이가 정의상 0이 된다.
 
-실행: /opt/anaconda3/envs/pymol/bin/python src/rmsd_analysis.py
+실행: conda run -n pymol python src/rmsd_analysis.py
 출력: results/rmsd_pairs.csv
 """
 
