@@ -1,4 +1,4 @@
-# 분석 스크립트(src/)용. PyMOL 은 별도 conda 환경에 설치한다 (README '재현 방법' 참고).
+# 분석 스크립트(src/)용. PyMOL 은 별도 conda 환경에 설치한다 (README '실행 방법' 참고).
 # 검정 엔진(src/detectability.py)과 tests/ 는 표준 라이브러리만 쓴다.
 numpy
 matplotlib

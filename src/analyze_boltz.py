@@ -1,7 +1,7 @@
 """Boltz-2 결과 집계 — TREM2 ± Aβ42 결합 신뢰도 비교.
 
 읽는 지표
-  iptm            두 사슬(TREM2·Aβ42) 사이 인터페이스 신뢰도. **이게 결합 지표다**
+  iptm            두 사슬(TREM2·Aβ42) 사이 인터페이스 신뢰도. 결합 축에서 비교하는 지표다
   complex_iplddt  인터페이스 잔기들의 pLDDT
   ptm             복합체 전체
   complex_plddt   복합체 전체 pLDDT
@@ -100,11 +100,13 @@ def summarize(out_csv: Path) -> list[str]:
     lines: list[str] = []
     A = lines.append
 
-    A("# Boltz-2 결과 · 결합 신뢰도 감별력 검정\n")
-    A("**검정 설계** — 구조 축과 동일하다. 같은 대립형질 안의 쌍 = 모델 진동(음성 대조군),")
-    A("대립형질 간 쌍 = 변이 신호. 통계량은 median(신호) − median(노이즈) 이고")
-    A("**라벨 순열검정**으로 p 를 구한다 — 쌍이 서로 독립이 아니라 Mann–Whitney 는 과소평가한다.")
-    A("`src/detectability.py` 와 `app/app.js` 가 같은 엔진·같은 PRNG 를 써 p 가 자릿수까지 일치한다.\n")
+    A("# Boltz-2 결과: 결합 신뢰도 감별력 검정\n")
+    A("검정 설계는 구조 축과 같음.\n")
+    A("- 음성 대조군: 같은 대립형질 안의 쌍(모델 변동). 처리군: 대립형질 간 쌍")
+    A("- 값: ipTM 등 구조당 스칼라의 쌍 차이 `|x_i − x_j|`")
+    A("- 통계량: median(처리군 쌍) − median(음성 대조군 쌍)")
+    A("- 검정: 라벨 순열검정, 단측, α = 0.05. 쌍이 서로 독립이 아니어서 Mann-Whitney의 p는 과소평가됨")
+    A("- `src/detectability.py`와 `app/app.js`가 같은 알고리즘과 같은 PRNG(mulberry32)를 씀\n")
 
     for gene in sorted({r["gene"] for r in rows}):
         if gene not in ALLELES:
@@ -116,7 +118,7 @@ def summarize(out_csv: Path) -> list[str]:
         seeds = sorted({int(r["seed"]) for r in g})
 
         A(f"## {gene} ± {lig}\n")
-        A(f"구조 {len(g)}개 ({a_lab} {na} + {b_lab} {nb}) · 시드 {seeds} × 모델 5개\n")
+        A(f"구조 {len(g)}개 ({a_lab} {na} + {b_lab} {nb}), 시드 {seeds} × 모델 5개\n")
         A("| 지표 | 음성 대조군 (같은 대립형질 쌍) | 처리군 (대립형질 간 쌍) | 비 | 순열 p | 판정 |")
         A("|---|---|---|---|---|---|")
 
@@ -129,27 +131,27 @@ def summarize(out_csv: Path) -> list[str]:
             v = verdict_from_scalars(a, b)
             if k == "iptm":
                 iptm_v = v
-            A(f"| **{k}** | {v['mn']:.4f} (n={len(v['noise'])}쌍) "
+            A(f"| {k} | {v['mn']:.4f} (n={len(v['noise'])}쌍) "
               f"| {v['ms']:.4f} (n={len(v['signal'])}쌍) | {v['ratio']:.2f}× "
-              f"| {v['p']:.4f} | {'**감별됨**' if v['det'] else '**구분 안 됨**'} |")
+              f"| {v['p']:.4f} | {'감별됨' if v['det'] else '구분 안 됨'} |")
 
         ia = [float(r["iptm"]) for r in g if r["allele"] == a_lab]
         ib = [float(r["iptm"]) for r in g if r["allele"] == b_lab]
-        A(f"\n원시 ipTM 중앙값 — {a_lab} {st.median(ia):.3f} "
-          f"(범위 {min(ia):.3f}–{max(ia):.3f}) / "
-          f"{b_lab} {st.median(ib):.3f} (범위 {min(ib):.3f}–{max(ib):.3f})\n")
+        A(f"\n원시 ipTM 중앙값: {a_lab} {st.median(ia):.3f} "
+          f"(범위 {min(ia):.3f}~{max(ia):.3f}), "
+          f"{b_lab} {st.median(ib):.3f} (범위 {min(ib):.3f}~{max(ib):.3f})\n")
 
         if iptm_v is None:
             continue
-        A(f"검정 방식: {iptm_v['method']} · {iptm_v['n_perm']:,}"
+        A(f"검정 방식: {iptm_v['method']}, {iptm_v['n_perm']:,}"
           + (f" (도달 가능한 최소 p = {1/iptm_v['n_perm']:.4f})" if iptm_v["method"] == "exact" else "")
-          + "\n")
+          + ". exact는 전수 열거 분할 수, sample은 고정 시드 표본 순열 횟수임\n")
         if iptm_v["det"]:
-            A("→ 변이 쌍 차이가 모델 진동을 통계적으로 **초과했다.**\n")
+            A("- 변이 쌍 차이가 모델 변동을 통계적으로 초과함.\n")
         else:
-            A(f"→ **Boltz-2 가 이 변이를 감별하지 못했다.** (비 {iptm_v['ratio']:.2f}×"
-              + (", 1.0 미만 — 변이 쌍 차이가 같은 서열 쌍 차이보다도 작다)" if iptm_v["ratio"] < 1 else ")"))
-            A("→ 결합 변화가 없다는 뜻이 아니라 **이 모델이 변이를 감지하지 못한다**는 뜻이다.\n")
+            A(f"- Boltz-2가 이 변이를 감별하지 못함(비 {iptm_v['ratio']:.2f}×"
+              + (". 1.0 미만이므로 변이 쌍 차이가 같은 서열 쌍 차이보다 작음)." if iptm_v["ratio"] < 1 else ")."))
+            A("- 결합 변화가 없다는 뜻이 아니라 이 모델이 변이를 감지하지 못한다는 뜻임.\n")
 
     return lines
 
@@ -177,26 +179,28 @@ def main() -> int:
     lines = summarize(out_csv)
     A = lines.append
 
-    A("\n## 반드시 함께 보고할 한계\n")
-    A("1. **affinity 수치가 아니다.** Boltz-2 affinity head는 저분자 전용이고 "
-      "Aβ42는 펩타이드다. ipTM은 결합력이 아니라 **인터페이스 신뢰도**다.")
-    A("2. **Bret et al. 2026** (*J Chem Inf Model*) — Boltz-2 affinity가 결합부위 변이에 둔감. "
-      "타겟을 바꿔도 분류가 잘 안 바뀌는 사례 보고.")
-    A("3. **King et al. 2025** — Boltz-2를 단백질–단백질 친화도로 미세조정해도 "
-      "서열 기반 모델보다 성능이 낮았다.")
-    A("4. 실험적 검증 없음. 예측 대 예측 비교다.")
-    A("5. **PILRA 는 글리칸 부재가 겹친다 (추정).** PILRA 의 리간드 인식은 시알산 매개인데 "
-      "Boltz-2 단백질–단백질 예측에는 글리칸이 없다. 미감별이 모델 한계 때문인지 "
-      "글리칸 부재 때문인지 이 결과만으로는 구분할 수 없다.")
+    A("\n## 함께 보고할 한계\n")
+    A("1. affinity 수치가 아님. Boltz-2 affinity head는 저분자 전용이고 "
+      "Aβ42는 펩타이드임. ipTM은 결합력이 아니라 인터페이스 신뢰도임.")
+    A("2. Bret et al. 2026 (*J Chem Inf Model*): Boltz-2 affinity가 결합부위 변이에 둔감함. "
+      "타겟을 바꿔도 분류가 잘 바뀌지 않는 사례를 보고함.")
+    A("3. King et al. 2025: Boltz-2를 단백질-단백질 친화도로 미세조정해도 "
+      "서열 기반 모델보다 성능이 낮았다고 보고함.")
+    A("4. 실험적 검증 없음. 예측 대 예측 비교임.")
+    A("5. PILRA는 글리칸 부재가 겹침(추정). PILRA의 리간드 인식은 시알산 매개인데 "
+      "Boltz-2 단백질-단백질 예측에는 글리칸이 없음. 미감별이 모델 한계 때문인지 "
+      "글리칸 부재 때문인지 이 결과만으로는 구분할 수 없음.")
+    A("6. PILRA 행은 ipTM만 있고 나머지 지표는 빈칸이라 위 표에 ipTM 한 줄만 나옴. "
+      "PILRA 복합체의 구조 파일과 원시 신뢰도 JSON은 저장소에 없음.")
 
     A("\n## 근거 문헌\n")
-    A("- Zhao et al. 2018, *Neuron* — TREM2가 Aβ 올리고머에 나노몰 결합, AD 변이가 결합 감소")
-    A("- Zhong et al. 2018, *Mol Neurodegener* — oAβ1-42 고친화도 결합, 결합 필수 잔기 31–91 (R62 포함)")
-    A("- Yeh et al. 2016, *Neuron* — TREM2–APOE/CLU/LDL 결합, 질병 변이가 저해")
-    A("- Passaro et al. 2025 — Boltz-2 (MIT, FEP 근접 성능)")
-    A("- Bret et al. 2026, *JCIM* — Boltz-2 결합부위 변이 둔감성")
-    A("- Rathore N, et al. 2018, *PLoS Genet* 14(11):e1007427 — "
-      "PILRA G78R 이 시알산 결합 잔기를 바꿔 NPDC1 등 리간드 결합을 50% 이상 감소")
+    A("- Zhao et al. 2018, *Neuron*: TREM2가 Aβ 올리고머에 나노몰 결합, AD 변이가 결합 감소")
+    A("- Zhong et al. 2018, *Mol Neurodegener*: oAβ1-42 고친화도 결합, 결합 필수 잔기 31~91 (R62 포함)")
+    A("- Yeh et al. 2016, *Neuron*: TREM2와 APOE, CLU, LDL의 결합, 질병 변이가 저해")
+    A("- Passaro et al. 2025: Boltz-2 (MIT, FEP 근접 성능)")
+    A("- Bret et al. 2026, *JCIM*: Boltz-2 결합부위 변이 둔감성")
+    A("- Rathore N, et al. 2018, *PLoS Genet* 14(11):e1007427: "
+      "PILRA G78R이 시알산 결합 잔기를 바꿔 NPDC1 등 리간드 결합을 50% 이상 감소")
 
     (RESULTS / "boltz_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))

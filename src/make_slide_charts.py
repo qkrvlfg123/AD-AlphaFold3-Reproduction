@@ -1,9 +1,10 @@
-"""슬라이드 11·13용 시각자료를 만든다.
+"""슬라이드 11·13·14용 시각자료를 만든다.
 
-  figures/slide11_targets.png  — 7개 인과 단백질 중 구조 예측 가능한 3개 (표 형식)
-  figures/slide13_noise.png    — 노이즈 바닥 vs 변이 신호 분포 (작은 배수 3패널)
+  figures/slide11_targets.png     — 7개 인과 단백질 중 구조 예측 가능한 3개 (표 형식)
+  figures/slide13_noise.png       — 노이즈 바닥 vs 변이 신호 분포 (작은 배수 3패널)
+  figures/slide14_boltz_iptm.png  — Boltz-2 결합 축 ipTM 쌍 차이 분포 (TREM2 + Aβ42)
 
-색은 검증된 카테고리 팔레트 슬롯 1·2를 쓴다 (validate_palette.js 전 항목 PASS).
+색은 카테고리 팔레트 슬롯 1·2를 쓴다 (validate_palette.js 로 확인했다는 기록. 이 스크립트는 저장소에 없다).
   노이즈 = 파랑 #2a78d6 (배경 역할) · 신호 = 주황 #eb6834 (주목 대상)
 
 실행: python3 src/make_slide_charts.py
@@ -40,7 +41,7 @@ INK_MUTED = "#8a8a86"
 GRID = "#e6e5e1"
 C_NOISE = "#2a78d6"        # 슬롯 1 파랑
 C_SIGNAL = "#eb6834"       # 슬롯 2 주황
-C_NAVY = "#1e3a5f"         # 발표 타이틀색
+C_NAVY = "#1e3a5f"         # 제목 색
 
 # 한글 폰트 — 실행 환경에 있는 것을 고른다.
 # macOS(AppleGothic) 하드코딩이었으나 Windows/Linux 에서 한글이 깨져 후보 목록으로 바꿨다.

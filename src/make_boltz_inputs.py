@@ -1,9 +1,10 @@
 """Boltz-2 입력 YAML을 만든다 — TREM2 ± Aβ42 복합체.
 
 목적
-  논문은 "변이 → 구조 변화"만 봤다. 우리 재현 결과 구조 변화는 노이즈 수준이었다.
-  그런데 실험 문헌은 TREM2 변이가 **Aβ 결합**을 떨어뜨린다고 보고한다.
-  → 구조가 아니라 결합을 봐야 한다. AlphaFold3는 결합을 못 재고, Boltz-2는 잰다.
+  논문은 "변이 → 구조 변화"만 봤다. 재현 결과 TREM2 R62H 의 구조 차이는 작았고
+  (국소 RMSD 중앙값 차 0.09 Å) 판정이 지표에 따라 갈렸다.
+  실험 문헌은 TREM2 변이가 **Aβ 결합**을 떨어뜨린다고 보고한다.
+  → 결합 축을 따로 본다. Boltz-2 복합체 예측의 ipTM(인터페이스 신뢰도)을 비교한다.
 
 근거
   · Zhao et al. 2018, Neuron  — TREM2가 Aβ 올리고머에 나노몰 친화도로 결합.
@@ -17,7 +18,7 @@
     결합력 수치(affinity)는 나오지 않는다. 우리가 얻는 건 **ipTM(결합 신뢰도)** 다.
     → `properties: affinity` 블록을 넣지 않는다.
   · Bret et al. 2026, JCIM — Boltz-2 affinity가 결합부위 변이에 둔감하다는 보고.
-    → ipTM 차이도 노이즈 바닥 검정을 거쳐야 한다. 그냥 믿으면 안 된다.
+    → ipTM 차이도 음성 대조군과 비교하는 검정(라벨 순열검정)을 거쳐야 한다.
 
 구간 선택
   TREM2는 **Ig 도메인(19–130)** 만 쓴다. 전장을 쓰면 막관통·세포질 꼬리가
@@ -113,13 +114,13 @@ def main() -> int:
         for seed in SEEDS
     )
 
-    (OUT / "README.md").write_text(f"""# Boltz-2 실행 — TREM2 ± Aβ42
+    (OUT / "README.md").write_text(f"""# Boltz-2 실행: TREM2 ± Aβ42
 
-## 무엇을 왜 하는가
+## 목적과 배경
 
-논문은 변이의 **구조** 변화를 봤다. 우리 재현 결과 그 변화는 노이즈 수준이었다.
-실험 문헌은 TREM2 변이가 **Aβ 결합**을 떨어뜨린다고 보고한다.
-→ 결합을 재야 한다. AlphaFold3는 못 재고 Boltz-2는 잰다.
+논문은 변이의 구조 변화를 봄. 재현 결과 TREM2 R62H의 구조 차이는 작았고(국소 RMSD 중앙값 차 0.09 Å) 판정이 지표에 따라 갈렸음.
+실험 문헌은 TREM2 변이가 Aβ 결합을 떨어뜨린다고 보고함.
+그래서 결합 축을 따로 봄. Boltz-2로 TREM2 + Aβ42 복합체를 예측하고 인터페이스 신뢰도(ipTM)를 비교함.
 
 ## 입력
 
@@ -130,15 +131,15 @@ def main() -> int:
 | `TREM2_WT_alone.yaml` | TREM2 야생형 단독 (대조) | {len(dom_wt)} aa |
 | `TREM2_{label}_alone.yaml` | TREM2 {label} 단독 (대조) | {len(dom_mut)} aa |
 
-TREM2는 Ig 도메인 {s}–{e} (결정구조 5UD8·5ELI 구간, 결합 필수 잔기 31–91 포함).
-Aβ42는 APP P05067 {a}–{b}.
+- TREM2는 Ig 도메인 {s}~{e} 구간을 씀(결정구조 5UD8, 5ELI 구간이며 결합 필수 잔기 31~91을 포함).
+- Aβ42는 APP P05067 {a}~{b}임.
+- 단독 입력 2개는 대조용으로 만든 것이며, 아래 실행 명령과 저장소의 결과에는 복합체 입력만 포함됨.
 
 ## 읽을 지표
 
-- **ipTM** (0~1) — 두 사슬 사이 인터페이스 신뢰도. **이게 결합 지표다**
-- **interface pLDDT** — 접촉면 잔기들의 확신도
-- ❌ affinity 수치는 안 나온다. Boltz-2 affinity head는 **저분자 전용**이고
-  Aβ42는 펩타이드다. `properties: affinity` 블록을 일부러 넣지 않았다.
+- ipTM (0~1): 두 사슬 사이 인터페이스 신뢰도. 결합 축에서 비교하는 지표임
+- interface pLDDT: 접촉면 잔기들의 확신도
+- affinity 수치는 나오지 않음. Boltz-2 affinity head는 저분자 전용이고 Aβ42는 펩타이드임. `properties: affinity` 블록을 넣지 않았음
 
 ## 실행 (Colab T4 권장)
 
@@ -149,20 +150,20 @@ Aβ42는 APP P05067 {a}–{b}.
 {cmds}
 ```
 
-## ⚠️ 해석 시 반드시 함께 보고할 것
+## 해석할 때 함께 보고할 것
 
-Bret et al. 2026 (J Chem Inf Model)은 Boltz-2 affinity가 **결합부위 변이에 둔감**하다고
-보고했다. 따라서 WT와 {label}의 ipTM 차이도 **노이즈 바닥 검정을 거쳐야** 한다.
-시드 {SEEDS} × diffusion sample {DIFFUSION_SAMPLES}개로 분포를 만들어,
-구조 파트와 동일한 Mann–Whitney U 검정을 적용한다.
+- Bret et al. 2026 (J Chem Inf Model)은 Boltz-2 affinity가 결합부위 변이에 둔감하다고 보고함. 따라서 WT와 {label}의 ipTM 차이도 음성 대조군과 비교하는 검정을 거쳐야 함.
+- 시드 {SEEDS} × diffusion sample {DIFFUSION_SAMPLES}개로 분포를 만들고, 구조 축과 같은 라벨 순열검정(`src/detectability.py`)을 적용함.
+- 처음에는 Mann-Whitney U 검정을 썼고 2026-09-03에 순열검정으로 바꿈. 쌍이 서로 독립이 아니어서 Mann-Whitney의 p가 과소평가되기 때문임.
+- 검정 결과는 `results/boltz_summary.md`에 있음.
 
 ## 근거 문헌
 
-- Zhao et al. 2018, *Neuron* — TREM2가 Aβ 올리고머에 나노몰 결합, AD 변이가 결합 감소
-- Zhong et al. 2018, *Mol Neurodegener* — oAβ1-42 고친화도 결합, 필수 잔기 31–91
-- Yeh et al. 2016, *Neuron* — TREM2–APOE/CLU/LDL 결합, 질병 변이가 저해
-- Passaro et al. 2025, *bioRxiv* — Boltz-2 (MIT 라이선스, FEP 근접 성능)
-- Bret et al. 2026, *JCIM* — Boltz-2의 결합부위 변이 둔감성 (한계)
+- Zhao et al. 2018, *Neuron*: TREM2가 Aβ 올리고머에 나노몰 결합, AD 변이가 결합 감소
+- Zhong et al. 2018, *Mol Neurodegener*: oAβ1-42 고친화도 결합, 필수 잔기 31~91
+- Yeh et al. 2016, *Neuron*: TREM2와 APOE, CLU, LDL의 결합, 질병 변이가 저해
+- Passaro et al. 2025, *bioRxiv*: Boltz-2 (MIT 라이선스, FEP 근접 성능)
+- Bret et al. 2026, *JCIM*: Boltz-2의 결합부위 변이 둔감성 (한계)
 """)
 
     print(f"\n→ {OUT.relative_to(ROOT)}/  YAML {len(jobs)}개 + README.md")

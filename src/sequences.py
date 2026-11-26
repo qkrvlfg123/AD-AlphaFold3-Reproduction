@@ -1,4 +1,4 @@
-"""GPX4... 가 아니라 AD 논문 재현용 서열 생성기.
+"""AD 논문 재현용 서열 생성기.
 
 Yao et al., Cell Genomics 4:100700 (2024) 의 AlphaFold 파트 재현 입력을 만든다.
 
@@ -150,7 +150,7 @@ def apply_mutation(seq: str, pos: int, wt: str, mut: str, gene: str) -> str:
     if actual != wt:
         raise AssertionError(
             f"{gene} {pos}번이 '{actual}'인데 '{wt}'를 기대함. "
-            f"isoform 또는 번호 체계 오류 — CLAUDE.md의 잔기 번호 표를 확인할 것."
+            f"isoform 또는 번호 체계 오류 — src/sequences.py 의 TARGETS 정의를 확인할 것."
         )
     return seq[: pos - 1] + mut + seq[pos:]
 

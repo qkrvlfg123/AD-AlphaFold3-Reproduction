@@ -34,7 +34,7 @@ const caseLabel = g => `${CASES[g].wt}${CASES[g].pos}${CASES[g].mut}`;
 const median = a => {const s=[...a].sort((x,y)=>x-y), m=s.length>>1;
   return s.length%2 ? s[m] : (s[m-1]+s[m])/2;};
 
-/** Mann–Whitney U — 정규근사, 동순위 보정 포함 */
+/** Mann–Whitney U — 정규근사, 동순위 보정 포함. 판정에는 쓰지 않는다 (순열을 돌릴 수 없을 때의 대체값 pMW 용) */
 function mannWhitneyU(a, b, alternative='greater'){
   const n1=a.length, n2=b.length;
   const all=[...a.map(v=>({v,g:0})), ...b.map(v=>({v,g:1}))].sort((x,y)=>x.v-y.v);
@@ -317,8 +317,8 @@ function dlBoltz(){
 
 /* ────────────── 판정 계산 (순수 함수 · 단일 출처) ──────────────
    화면 3·4·5 가 모두 이 두 함수만 쓴다. 검정 로직의 복사본을 만들지 않는다.
-   검정 방향은 축마다 다르다 — 구조는 단측(신호 > 노이즈), 결합은 양측.
-   두 축은 귀무가설이 다르므로 det 를 합성하지 않고 나란히 읽는다. */
+   두 축 모두 라벨 순열검정 · 단측(신호 쌍 > 노이즈 쌍)이다.
+   측정 대상이 구조 편차와 결합 신뢰도로 다르므로 det 를 합성하지 않고 나란히 읽는다. */
 let RMSD=null, IPTM=null;
 const VERDICT_CACHE = {};          // 순열 2만 회를 렌더마다 돌리지 않는다
 
@@ -385,7 +385,7 @@ async function computeBindingVerdict(gene){
     axis:'binding', gene, wt, mut, noise, signal,
     p:perm.p, pMW, det:perm.p<0.05, method:perm.method, nPerm:perm.nPerm,
     mn, ms, dPair:ms-mn, ratio:ms/mn,
-    // 원시 ipTM 기술통계 — 화면 4 가 아직 쓴다 (커밋 2 에서 쌍 차이 표시로 교체)
+    // 원시 ipTM 기술통계 — 화면 4 가 mw·mm 을 표시한다 (d·spread 는 현재 화면에서 쓰지 않는다)
     mw, mm, d:mm-mw, spread:Math.max(...wt)-Math.min(...wt)});
 }
 
@@ -623,11 +623,11 @@ async function renderReport(){
 }
 
 /* ────────────── 종합 판정 매트릭스 (2×2) ──────────────
-   두 축의 det 를 AND/OR 로 합성하지 않는다. 구조는 단측(신호 > 노이즈),
-   결합은 양측이라 귀무가설이 다르다 — 교차 배치해 나란히 읽는 표다.
+   두 축의 det 를 AND/OR 로 합성하지 않는다. 검정은 두 축 모두 단측 순열검정이지만
+   측정 대상(구조 편차 · 결합 신뢰도)이 다르다 — 교차 배치해 나란히 읽는 표다.
 
-   결합 축 원자료(boltz_iptm.csv)는 gene 칼럼이 없는 TREM2 단일 사례 전제다.
-   CD33·PILRA 는 '결합 미측정' 으로 매트릭스 밖에 둔다.
+   결합 축 원자료(boltz_iptm.csv)는 gene 칼럼으로 사례를 구분한다 (TREM2 · PILRA).
+   결합 예측이 없는 CD33 은 '결합 미측정' 으로 매트릭스 밖에 둔다.
    미측정과 미감별은 다른 상태이므로 빈칸을 '차이 없음' 으로 표시하지 않는다. */
 const BIND_MEASURED = ['TREM2', 'PILRA'];   // 결합 축 예측을 실제로 돌린 사례
 const CELL_HINT = {                  // 빈칸에 표시할 향후 배치 후보
